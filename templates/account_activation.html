@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Activate Account</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f9f9f9;
+        }
+
+        h2 {
+            color: #333;
+        }
+
+        #response-message {
+            font-size: 1.2em;
+            margin-top: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .loading-spinner {
+            width: 30px;
+            height: 30px;
+            border: 4px solid #ccc;
+            border-top: 4px solid #007bff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 10px;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        .success-icon,
+        .error-icon {
+            font-size: 1.5em;
+            margin-right: 10px;
+        }
+
+        .success-icon {
+            color: green;
+        }
+
+        .error-icon {
+            color: red;
+        }
+    </style>
+</head>
+
+<body>
+    <h2>Activating Your Account...</h2>
+
+    <div id="response-message">
+        <div class="loading-spinner" id="loading-spinner"></div>
+        <span id="message-text">Please wait...</span>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            // Get the values for uid and token from Django context
+            const uid = "{{ uuid }}";  // The uid is injected by Django
+            const token = "{{ token }}";  // The token is injected by Django
+
+            // Prepare the POST request data
+            const data = {
+                uid: uid,
+                token: token
+            };
+
+            // Automatically send the POST request using Fetch API
+            fetch('/auth/users/activation/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(data)
+            })
+                .then(response => {
+                    const responseMessage = document.getElementById('response-message');
+                    const loadingSpinner = document.getElementById('loading-spinner');
+                    const messageText = document.getElementById('message-text');
+
+                    // Remove loading spinner
+                    loadingSpinner.style.display = 'none';
+
+                    if (response.status === 204) {
+                        // Show success message with check icon
+                        responseMessage.innerHTML = `<span class="success-icon">&#10004;</span>Account activated successfully!`;
+                    } else {
+                        // Show error message with X icon
+                        responseMessage.innerHTML = `<span class="error-icon">&#10006;</span>Activation failed. Please try again.`;
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    const responseMessage = document.getElementById('response-message');
+                    const loadingSpinner = document.getElementById('loading-spinner');
+
+                    // Remove loading spinner and display error icon
+                    loadingSpinner.style.display = 'none';
+                    responseMessage.innerHTML = `<span class="error-icon">&#10006;</span>An error occurred while activating your account.`;
+                });
+        });
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,63 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lesson Confirmation</title>
+</head>
+
+<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+    <h1 style="color: #5cb85c;">Lesson Confirmation</h1>
+    <p>Dear {{ user_name }},</p>
+
+    <p>Thank you for joining Timeable! We are delighted to confirm your lesson and provide details regarding the
+        Timeable Application.</p>
+
+    <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
+        <tr>
+            <td style="border: 1px solid #ddd; padding: 8px;"><strong>Tutor Name:</strong></td>
+            <td style="border: 1px solid #ddd; padding: 8px;">{{ tutor_name }}</td>
+        </tr>
+        <tr>
+            <td style="border: 1px solid #ddd; padding: 8px;"><strong>Student Name:</strong></td>
+            <td style="border: 1px solid #ddd; padding: 8px;">{{ student_name }}</td>
+        </tr>
+        <tr>
+            <td style="border: 1px solid #ddd; padding: 8px;"><strong>Date:</strong></td>
+            <td style="border: 1px solid #ddd; padding: 8px;">{{ lesson_date }}</td>
+        </tr>
+        <tr>
+            <td style="border: 1px solid #ddd; padding: 8px;"><strong>Time:</strong></td>
+            <td style="border: 1px solid #ddd; padding: 8px;">{{ lesson_time }}</td>
+        </tr>
+        <tr>
+            <td style="border: 1px solid #ddd; padding: 8px;"><strong>Duration:</strong></td>
+            <td style="border: 1px solid #ddd; padding: 8px;">{{ lesson_duration }} minutes</td>
+        </tr>
+        <tr>
+            <td style="border: 1px solid #ddd; padding: 8px;"><strong>Mode:</strong></td>
+            <td style="border: 1px solid #ddd; padding: 8px;">{{ mode }}</td>
+        </tr>
+    </table>
+
+    <p>If you encounter any issues with the application or have further questions, feel free to reach out to us at <a
+            href="mailto:hello.timeable@gmail.com">hello.timeable@gmail.com</a>.</p>
+
+    <p>Thank you for joining us in creating meaningful learning experiences. We look forward to seeing your impact!</p>
+
+    <p>Best regards,</p>
+    <p><strong>Timeable</strong></p>
+
+    <p>
+        <a href="https://facebook.com" target="_blank">
+            <img src="{% static 'images/facebook-icon.png' %}" alt="Facebook" style="width: 24px; height: 24px;">
+        </a>
+        <a href="https://instagram.com" target="_blank">
+            <img src="{% static 'images/instagram-icon.png' %}" alt="Instagram" style="width: 24px; height: 24px;">
+        </a>
+    </p>
+</body>
+
+</html>

@@ -1,0 +1,146 @@
+{% load static %}
+
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Google Calendar Linked Successfully | Timeable</title>
+    <meta name="description"
+        content="Your Google Calendar has been successfully linked with Timeable. Start managing your schedules seamlessly with real-time synchronization.">
+    <meta name="author" content="Timeable">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+        integrity="sha512-iecdLmaskl7CVkqkXNQ/ZH/XLlvWZOJyj7Yy7tcenmpD1ypASozpmT/E0iPtmFIB46ZmdtAc9eNBvH0H/ZpiBw=="
+        crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Poppins';
+            background-color: #fff;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .container {
+            margin-top: 1rem;
+            background-color: #fff;
+            padding: 3rem;
+            text-align: left;
+        }
+
+
+        .logo img {
+            width: 160px;
+            /* Adjust the size of the logo */
+            height: auto;
+        }
+
+        .title {
+            font-size: 36px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 1rem;
+        }
+
+        .subtitle {
+            font-size: 14px;
+            font-weight: 300;
+            color: #9EA1A6;
+            margin-bottom: 2rem;
+        }
+
+        .form-group {
+            margin-bottom: 1.5rem;
+            position: relative;
+        }
+
+        label {
+            font-family: 'Poppins';
+            display: block;
+            font-size: 14px;
+            color: #9EA1A6;
+            margin-bottom: 0.5rem;
+        }
+
+        input {
+            font-family: 'Poppins';
+            width: 100%;
+            padding: 0.8rem;
+            border: 1px solid #9EA1A6;
+            border-radius: 4px;
+            font-size: 14px;
+            box-sizing: border-box;
+            /* Ensures padding and border are included in the width */
+        }
+
+        .info-text {
+            font-family: 'Poppins';
+            font-size: 12px;
+            color: #9EA1A6;
+            margin-top: 0.5rem;
+        }
+
+        .btn {
+            font-family: 'Poppins';
+            font-weight: 500;
+            display: inline-block;
+            padding: 0.8rem;
+            background-color: #4EAE8A;
+            color: #fff;
+            border: none;
+            border-radius: 4px;
+            font-size: 14px;
+            cursor: pointer;
+            margin-top: 0.6rem;
+        }
+
+        .btn:hover {
+            background-color: #247c5a;
+        }
+
+        .toggle-password {
+            position: absolute;
+            top: 50%;
+            right: 10px;
+            transform: translateY(-50%);
+            cursor: pointer;
+            font-size: 14px;
+            color: #9EA1A6;
+        }
+
+        .status {
+            text-align: center;
+        }
+
+        .status img {
+            width: 275px;
+            text-align: center;
+            margin-bottom: 40px;
+            margin-top: 50px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container" id="resetContainer">
+        <div class="logo">
+            <img src="{% static 'images/logo.png' %}" alt="Timeable Logo">
+        </div>
+        <div id="body">
+            <div class="status">
+                <img src="{% static 'images/forgot-password-success.png' %}" alt="status-success">
+                <div class="title">Linked Successfully</div>
+                <p class="subtitle">
+                    Your Google Calendar has been successfully linked. You can now manage your lessons directly from
+                    your calendar.
+                </p>
+            </div>
+        </div>
+    </div>
+</body>
+
+</html>

@@ -1,0 +1,60 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lesson Requested</title>
+</head>
+
+<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+    <h1 style="color: #5cb85c;">Lesson Requested</h1>
+    <p>Dear {{ student_name }},</p>
+
+    <p>We’re pleased to inform you that your lesson request has been received and is awaiting confirmation from your
+        tutor. Below are the details:</p>
+
+    <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
+        <tr>
+            <td style="border: 1px solid #ddd; padding: 8px;"><strong>Student Name:</strong></td>
+            <td style="border: 1px solid #ddd; padding: 8px;">{{ student_name }}</td>
+        </tr>
+        <tr>
+            <td style="border: 1px solid #ddd; padding: 8px;"><strong>Date:</strong></td>
+            <td style="border: 1px solid #ddd; padding: 8px;">{{ requested_date }}</td>
+        </tr>
+        <tr>
+            <td style="border: 1px solid #ddd; padding: 8px;"><strong>Time:</strong></td>
+            <td style="border: 1px solid #ddd; padding: 8px;">{{ requested_time }}</td>
+        </tr>
+        <tr>
+            <td style="border: 1px solid #ddd; padding: 8px;"><strong>Duration:</strong></td>
+            <td style="border: 1px solid #ddd; padding: 8px;">{{ duration }} minutes</td>
+        </tr>
+        <tr>
+            <td style="border: 1px solid #ddd; padding: 8px;"><strong>Mode:</strong></td>
+            <td style="border: 1px solid #ddd; padding: 8px;">{{ mode }}</td>
+        </tr>
+    </table>
+
+    <p>Please respond to this request promptly to ensure a smooth scheduling process. If you have any questions or
+        encounter issues, feel free to contact us at <a
+            href="mailto:hello.timeable@gmail.com">hello.timeable@gmail.com</a>.</p>
+
+    <p>Thank you for joining us in creating meaningful learning experiences. We look forward to seeing your impact!</p>
+
+    <p>Best regards,</p>
+    <p><strong>Timeable</strong></p>
+
+    <p>
+        <a href="https://facebook.com" target="_blank">
+            <img src="{% static 'images/facebook-icon.png' %}" alt="Facebook" style="width: 24px; height: 24px;">
+        </a>
+        <a href="https://instagram.com" target="_blank">
+            <img src="{% static 'images/instagram-icon.png' %}" alt="Instagram" style="width: 24px; height: 24px;">
+        </a>
+    </p>
+</body>
+
+</html>

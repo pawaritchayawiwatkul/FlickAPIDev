@@ -1,0 +1,13 @@
+[Unit]
+Description=Celery Service
+After=network.target
+
+[Service]
+User=ec2-user
+Group=nginx
+WorkingDirectory=/home/ec2-user/api/version34
+ExecStart=/home/ec2-user/api/env/bin/celery -A internal worker --loglevel=info 
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

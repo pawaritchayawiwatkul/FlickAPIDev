@@ -1,0 +1,225 @@
+{% load static %}
+
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Guest Booking Form | Timeable</title>
+    <meta name="description"
+        content="Easily schedule your session using our guest booking form. No account needed—simply select your preferred time and tutor to book seamlessly with Timeable.">
+    <meta name="author" content="Timeable">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="{% static 'css/booking.css' %}" />
+
+</head>
+
+<body>
+    <input type="hidden" id="uid" value="{{ uuid }}">
+    <input type="hidden" id="selectedTimeSlot" value="">
+    <input type="hidden" id="selectedDate" value="">
+    <div class="container">
+        <div class="logo">
+            <img src="{% static 'images/logo.png' %}" alt="Timeable Logo" class="img-fluid">
+        </div>
+        <div class="floating-container">
+            <div class="scroll-container">
+                <div class="section">
+                    <div class="row">
+                        <div class="col-12 col-md-4 mb-4" id="booking_graphic">
+                            <div class="left-section">
+                                <div class="image-container">
+                                    <img src="{% static 'images/booking_graphic.png' %}" alt="Description of Image"
+                                        class="responsive-image">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-12 col-md-8 mb-8">
+                            <div class="right-section">
+                                <div class="form-container">
+                                    <h2>Lesson Information</h2>
+                                    <div class="form-group">
+                                        <label for="fullName">First and Last Name</label>
+                                        <input type="text" id="fullName" name="fullName" required
+                                            placeholder="Enter your full name">
+                                        <span class="error-message" id="fullNameError"></span>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="nickname">Nickname</label>
+                                        <input type="text" id="nickname" name="nickname"
+                                            placeholder="Enter your nickname">
+                                        <span class="error-message" id="nicknameError"></span>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="email">E-Mail</label>
+                                        <input type="text" id="email" name="email" required
+                                            placeholder="Enter your email">
+                                        <span class="error-message" id="emailError"></span>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="type">Type</label>
+                                        <div class="button-group">
+                                            <button class="btn-type" id="private" type="button">
+                                                <svg width="33" height="33" viewBox="0 0 33 33" fill="none"
+                                                    xmlns="http://www.w3.org/2000/svg">
+                                                    <g clip-path="url(#clip0_553_145)">
+                                                        <path
+                                                            d="M9.81174 26.1847L28.6921 22.7007C28.7499 22.69 28.8044 22.6715 28.8559 22.6487C28.8602 22.6479 28.8639 22.648 28.8682 22.6472C29.2712 22.5728 29.5383 22.1853 29.4638 21.782L25.6541 1.13626C25.5798 0.733019 25.1919 0.466199 24.7889 0.540572L24.6106 0.573477L6.89699 3.84212L5.72973 4.05751C3.78542 4.41629 2.4958 6.29001 2.85448 8.23378C2.85929 8.25985 2.86898 8.28365 2.87616 8.30834C3.20496 10.1044 6.22721 26.6075 6.64971 28.7724C6.65615 28.815 6.6586 28.8574 6.66651 28.9002C7.0114 30.7693 8.75724 32.0294 10.6194 31.8053C10.6574 31.8042 10.6946 31.8028 10.7329 31.7958L29.9035 28.2583C30.3065 28.1839 30.5736 27.7964 30.4992 27.393L29.9918 24.6434C29.9174 24.2403 29.5295 23.9733 29.1265 24.0477C28.7235 24.1221 28.4565 24.5099 28.5308 24.913L28.9034 26.9322L10.5738 30.3145C9.46376 30.5193 8.39499 29.8052 8.14766 28.7144C8.14513 28.6946 8.14527 28.6754 8.14122 28.6555C8.13457 28.6235 8.12428 28.5738 8.1113 28.5076C7.97556 27.4142 8.71437 26.3872 9.81174 26.1847ZM6.87738 7.49144C6.80297 7.08822 7.06984 6.70058 7.47306 6.62618C7.87629 6.55177 8.26393 6.81863 8.33833 7.22186L11.0763 22.0598C11.1507 22.4628 10.8839 22.8507 10.4807 22.9251C10.0774 22.9995 9.68975 22.7324 9.61539 22.3294L6.87738 7.49144Z" />
+                                                    </g>
+                                                    <defs>
+                                                        <clipPath id="clip0_553_145">
+                                                            <rect width="28.1856" height="28.1856" fill="white"
+                                                                transform="translate(0 5.11475) rotate(-10.455)" />
+                                                        </clipPath>
+                                                    </defs>
+                                                </svg>
+                                                Onsite
+                                            </button>
+                                            <button class="btn-type" id="group" type="button">
+                                                <svg width="40" height="40" viewBox="0 0 40 40"
+                                                    xmlns="http://www.w3.org/2000/svg">
+                                                    <g clip-path="url(#clip0_511_2051)">
+                                                        <path
+                                                            d="M37.4468 29.1302C38.8569 29.1302 40 30.1035 40 31.3041C40 32.5047 38.8569 33.478 37.4468 33.478H2.55318C1.14309 33.478 0 32.5047 0 31.3041C0 30.1035 1.14309 29.1302 2.55318 29.1302H37.4468ZM34.0425 6.52148C35.9227 6.52148 37.4468 8.01887 37.4468 9.86597V26.5884C37.4468 27.5119 36.6847 28.2606 35.7447 28.2606H4.25532C3.31526 28.2606 2.55318 27.5119 2.55318 26.5884V9.86597C2.55318 8.01887 4.07734 6.52148 5.95746 6.52148H34.0425ZM20.0281 10.8693C19.1052 10.8693 18.2234 11.0465 17.4152 11.3679C16.5755 11.7789 17.0241 11.5518 16.6562 11.7449C16.2792 11.9428 16.5572 11.7889 15.9812 12.1406C10.4436 15.8043 13.2647 24.9145 20.0283 24.7809C29.2664 24.6173 29.2655 11.0318 20.0281 10.8693ZM17.8499 20.9139C18.2665 21.2024 18.7434 21.4113 19.2584 21.5163V23.2042C18.2831 23.0682 17.3893 22.6781 16.6479 22.1033L17.8499 20.9139ZM22.2063 20.9139L23.4083 22.1033C22.667 22.6781 21.7731 23.0682 20.7978 23.2042V21.5163C21.3128 21.4113 21.7897 21.2024 22.2063 20.9139ZM25.4828 18.4431C25.3736 19.3927 25.0162 20.2687 24.4763 21.0059L23.2653 19.8076C23.5223 19.3982 23.702 18.9368 23.7847 18.4431H25.4828ZM16.2715 18.4431C16.3542 18.9367 16.5339 19.3981 16.791 19.8076L15.58 21.0058C15.0401 20.2687 14.6826 19.3927 14.5734 18.4431H16.2715ZM20.0282 15.5798C23.0104 15.6327 23.0099 20.018 20.0281 20.0705C17.0459 20.0176 17.0463 15.6322 20.0282 15.5798ZM15.7046 14.4805L16.9066 15.6699C16.6426 16.043 16.4451 16.4652 16.3313 16.9199H14.6143C14.7691 16.0108 15.1526 15.1775 15.7046 14.4805ZM24.3517 14.4805C24.9036 15.1775 25.2871 16.0108 25.4419 16.9199H23.7249C23.6112 16.4652 23.4137 16.043 23.1497 15.6699L24.3517 14.4805ZM19.2584 12.4461V14.134C18.8141 14.2246 18.3981 14.3925 18.0246 14.622L16.8136 13.4237C17.5209 12.9166 18.3547 12.5721 19.2584 12.4461ZM20.7978 12.4462C21.7016 12.5722 22.5353 12.9166 23.2426 13.4238L22.0316 14.6221C21.6582 14.3925 21.2422 14.2246 20.7978 14.134V12.4462Z" />
+                                                    </g>
+                                                    <defs>
+                                                        <clipPath id="clip0_511_2051">
+                                                            <rect width="40" height="40" fill="white" />
+                                                        </clipPath>
+                                                    </defs>
+                                                </svg>
+
+                                                Online
+                                            </button>
+                                        </div>
+                                        <span class="error-message" id="typeError"></span>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="note">Note ( Optional )</label>
+                                        <textarea id="note" name="note" placeholder="Enter any notes here"></textarea>
+                                        <span class="error-message" id="noteError"></span>
+                                    </div>
+                                </div>
+
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="section">
+                    <div class="row">
+                        <div class="col-12 col-md-3 mb-3">
+                            <div class="left-section">
+                                <h3>Date</h3>
+                                <div class="form-group">
+                                    <input type="date" id="dateField" name="date" required placeholder="YYYY-MM-DD">
+                                    <span class="error-message" id="emailError"></span>
+                                </div>
+                                <h3>Duration</h3>
+                                <div class="calendar-dropdown">
+                                    <div class="custom-dropdown">
+                                        <select id="duration" class="form-select">
+                                            <option value="30" selected>30 Minutes</option>
+                                            <option value="60">1 Hour</option>
+                                            <option value="90">1 Hour 30 Minutes</option>
+                                            <option value="120">2 Hour</option>
+                                            <option value="150">2 Hour 30 Minutes</option>
+                                            <option value="180">3 Hour</option>
+                                            <option value="210">3 Hour 30 Minutes</option>
+                                            <option value="240">4 Hour</option>
+                                            <option value="270">4 Hour 30 Minutes</option>
+                                            <option value="300">5 Hour</option>
+                                        </select>
+                                    </div>
+                                    <div class="duration-buttons">
+                                        <button class="" value="60">1 hour</button>
+                                        <button class="" value="90">1 hour 30 minutes</button>
+                                        <button class="" value="120">2 hour</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-12 col-md-9 mb-9">
+                            <div class="right-section">
+                                <div class="time-selection">
+                                    <button class="arrow-button" id="leftArrow">
+                                        <i class="fa fa-angle-left"></i>
+                                    </button>
+                                    <div class="timeslots-grid">
+                                        <!-- Placeholder for timeslots -->
+                                        <div class="day-timeslots" data-index="0">
+                                            <div class="dayslot">
+                                                <h1 class="day-name"></h1>
+                                                <h2 class="day-date"></h2>
+                                            </div>
+                                            <div class="timeslots" data-date="">
+                                                <!-- Timeslot buttons will go here -->
+                                            </div>
+                                        </div>
+                                        <div class="day-timeslots" data-index="1">
+                                            <div class="dayslot">
+                                                <h1 class="day-name"></h1>
+                                                <h2 class="day-date"></h2>
+                                            </div>
+                                            <div class="timeslots" data-date="">
+                                                <!-- Timeslot buttons will go here -->
+                                            </div>
+                                        </div>
+                                        <div class="day-timeslots" data-index="2">
+                                            <div class="dayslot">
+                                                <h1 class="day-name"></h1>
+                                                <h2 class="day-date"></h2>
+                                            </div>
+                                            <div class="timeslots" data-date="">
+                                                <!-- Timeslot buttons will go here -->
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <button class="arrow-button" id="rightArrow">
+                                        <i class="fa fa-angle-right"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="section">
+                    <div class="status" id="status">
+                        <div class="loader-container">
+                            <div class="loader"></div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+    <div class="footer text-center mt-4">
+        <button class="back btn btn-secondary" id="backButton" style="display: none;">Back</button>
+        <button class="next btn btn-primary" id="nextButton">Next</button>
+    </div>
+    <script>
+        const successUrl = "{% static 'images/forgot-password-success.png' %}";
+        const failedUrl = "{% static 'images/forgot-password-failed.png' %}";
+    </script>
+    <script src="{% static 'js/booking_form.js' %}"></script>
+    <script src="{% static 'js/timeslot.js' %}"></script>
+    <script>
+        document.querySelectorAll('.btn-type').forEach(button => {
+            button.addEventListener('click', function () {
+                // Remove active class from all buttons
+                document.querySelectorAll('.btn-type').forEach(btn => btn.classList.remove('active'));
+                // Add active class to the clicked button
+                button.classList.add('active');
+            });
+        });
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,20 @@
+[Unit]
+Description=Timeable Server
+Requires=gunicorn.socket
+After=network.target
+
+[Service]
+User=ec2-user
+Group=nginx
+WorkingDirectory=/home/ec2-user/api/version34
+ExecStart=/home/ec2-user/api/env/bin/gunicorn\
+ --workers 3\
+ --access-logfile /var/log/gunicorn/access.log\
+ --bind unix:/run/gunicorn.sock\
+--log-level debug\
+ internal.wsgi:application -c /etc/systemd/system/gunicorn.conf.py
+
+[Install]
+WantedBy=multi-user.target
+
+
