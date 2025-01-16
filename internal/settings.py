@@ -29,6 +29,8 @@ TIME_ZONE = 'UTC'  # Set this to your desired timezone
 USE_TZ = True
 activate(TIME_ZONE)
 
+CORS_ORIGIN_ALLOW_ALL = True
+
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
@@ -52,6 +54,7 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -104,11 +107,11 @@ elif DEVELOPING:
     DATABASES = {
         'default': {
         'ENGINE': 'django.db.backends.postgresql_psycopg2',
-        'NAME': 'railway',
-        'HOST': 'autorack.proxy.rlwy.net',
-        'USER': 'postgres',
-        'PASSWORD': 'DfXrqZpmjhvIUPuTjWJHVYEGSrsKERuT',
-        'PORT': '35576',
+        'NAME': os.getenv('DB_DEV_NAME'),
+        'USER': os.getenv('DB_DEV_USER'),
+        'PASSWORD': os.getenv('DB_DEV_PASSWORD'),
+        'HOST': os.getenv('DB_DEV_HOST'),
+        'PORT': os.getenv('DB_DEV_PORT'),
         }
     }    
 else:

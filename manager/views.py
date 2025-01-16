@@ -42,13 +42,18 @@ class CalendarViewSet(ViewSet):
                     ))
                 ), # .filter(booked_datetime__startswith=month)
             ),
+            Prefetch(
+                'teacher__guestlesson',
+                to_attr="guestlessons"
+            ),
         ).filter(id=admin.school.id).first()
 
         if not school:
             return Response({"error": "School not found."}, status=404)
 
         # Construct response data
-        appointments = []
+        lessons = []
+        guest_lessons = []
         for teacher in school.teacher.all():
             registrations = teacher.__dict__["_prefetched_objects_cache"]["registration"]
             for registration in registrations:
@@ -56,7 +61,7 @@ class CalendarViewSet(ViewSet):
                 for lesson in lessons:
                     start_time = lesson.booked_datetime
                     finish_time = lesson.booked_datetime + timedelta(minutes=lesson.registration.course.duration)
-                    appointments.append({
+                    lessons.append({
                         "code": lesson.code,
                         "start_time": start_time.isoformat(),
                         "end_time": finish_time.isoformat(),
@@ -69,9 +74,16 @@ class CalendarViewSet(ViewSet):
                         "teacher_last_name": teacher.user.last_name,
                         "teacher_uuid": teacher.user.uuid,
                     })
+            for lesson in teacher.guestlessons:
+                guest_lessons.append({
+                    "code": lesson.code,
+                    "status": lesson.status,  
+                })
+                
 
         response_data = {
-            "appointments": appointments,
+            "lesson": lessons,
+            # "guest_lesson": 
         }
 
         return Response(response_data, status=200)
@@ -215,8 +227,6 @@ class StaffViewSet(ViewSet):
                 "uuid": relation.student.user.uuid,
                 "name": f"{relation.student_first_name} {relation.student_last_name}",
                 "phone": relation.student.user.phone_number,
-                "favorite_teacher": relation.favorite_teacher,
-                "student_color": relation.student_color
             }
             for relation in student_relations
         ]
@@ -295,90 +305,14 @@ class ClientViewSet(ViewSet):
             {
                 "first_name": student.user.first_name,
                 "last_name": student.user.last_name,
+                "email": student.user.email,
                 "uuid": student.user.uuid
             }
             for student in school.students
         ]
 
         return Response({"clients": clients})
-    
-    def retrieve(self, request, uuid=None):
-        # Retrieve the Admin instance for the logged-in user
-        admin = Admin.objects.filter(user_id=request.user.id).first()
-        if not admin:
-            return Response({"error": "Admin not found for the current user."}, status=404)
 
-        # Retrieve the teacher by primary key (id)
-        student = Student.objects.get(user__uuid=uuid, school=admin.school)
-        if not student:
-            return Response({"error": "Teacher not found."}, status=404)
-
-        # Accessing the related user model for the teacher
-        user = student.user
-
-        # Prepare the detailed response for the teacher
-        student_detail = {
-            "id": user.uuid,  # Using UUID as a unique identifier
-            "first_name": user.first_name,
-            "last_name": user.last_name,  # Full name
-            "email": user.email,
-            "phone": user.phone_number,
-        }
-
-        return Response({"teacher": student_detail})
-        
-    def client(self, request, uuid=None):
-        # Retrieve the Admin instance for the logged-in user
-        admin = Admin.objects.select_related('school').filter(user_id=request.user.id).first()
-        if not admin:
-            return Response({"error": "Admin not found for the current user."}, status=404)
-
-        # Retrieve the teacher by their UUID and ensure they belong to the admin's school
-        try:
-            teacher = Teacher.objects.get(user__uuid=uuid, school_id=admin.school.id)
-        except Teacher.DoesNotExist:
-            return Response({"error": "Teacher not found."}, status=404)
-
-        # Retrieve all students related to the teacher via the StudentTeacherRelation model
-        student_relations = StudentTeacherRelation.objects.prefetch_related(
-            Prefetch('student', queryset=Student.objects.select_related('user'))
-        ).filter(teacher=teacher)
-
-        # Format the response data
-        clients = [
-            {
-                "uuid": relation.student.user.uuid,
-                "name": f"{relation.student_first_name} {relation.student_last_name}",
-                "phone": relation.student.user.phone_number,
-                "favorite_teacher": relation.favorite_teacher,
-                "student_color": relation.student_color
-            }
-            for relation in student_relations
-        ]
-
-        return Response({"clients": clients})
-
-    def edit(self, request, uuid):
-        # Retrieve the Admin instance for the logged-in user
-        admin = Admin.objects.select_related('school').filter(user_id=request.user.id).first()
-        if not admin:
-            return Response({"error": "Admin not found for the current user."}, status=404)
-
-        # Retrieve the teacher by their UUID and ensure they belong to the admin's school
-        try:
-            student = Student.objects.get(user__uuid=uuid, school=admin.school)
-        except Student.DoesNotExist:
-            return Response({"error": "Student not found."}, status=404)
-
-        # Use the UserUpdateSerializer to validate and update the user data
-        serializer = UserUpdateSerializer(student.user, data=request.data, partial=True)  # partial=True allows partial updates
-        
-        if serializer.is_valid():
-            serializer.save()  # Save the updated data
-            return Response({"message": "User info updated successfully."}, status=status.HTTP_200_OK)
-        
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)    
-    
     def create(self, request):
         # Retrieve the Admin instance for the logged-in user
         admin = Admin.objects.select_related('school').filter(user_id=request.user.id).first()
