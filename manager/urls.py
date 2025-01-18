@@ -4,6 +4,10 @@ from rest_framework.urlpatterns import format_suffix_patterns
 
 app_name = 'manager'
 
+insightViewSet = views.InsightViewSet.as_view({
+    'get': 'retrieve'
+})
+
 calendarViewSet = views.CalendarViewSet.as_view({
     'get': "month"
 })
@@ -31,7 +35,12 @@ clientViewSet = views.ClientViewSet.as_view({
     "post": "create"
 })
 
-clientDetailViewSet = views.RegistrationViewset.as_view({
+clientDetailViewSet = views.ClientViewSet.as_view({
+    "put": "edit",
+    "get": "retrieve"
+})
+
+clientRegistrationViewSet = views.RegistrationViewset.as_view({
     'get': "list",
     'post': 'create'
 })
@@ -43,6 +52,8 @@ courseViewSet = views.CourseViewset.as_view({
 
 # Enter URL path below
 urlpatterns = format_suffix_patterns([
+    path('insight', insightViewSet, name='insight'),
+
     path('calendar/month', calendarViewSet, name='profile-add'),
     path('purchase', registrationViewSet, name='purchase'),
 
@@ -52,7 +63,7 @@ urlpatterns = format_suffix_patterns([
 
     path('client', clientViewSet, name='client'),
     path('client/<slug:uuid>', clientDetailViewSet, name='client-detail'),
-    path('client/<slug:uuid>/registration', clientDetailViewSet, name='client-registration'),
+    path('client/<slug:uuid>/registration', clientRegistrationViewSet, name='client-registration'),
 
     path('course', courseViewSet, name='course'),
 

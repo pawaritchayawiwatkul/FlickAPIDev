@@ -40,7 +40,7 @@ class ProfileViewSet(ViewSet):
             return Response(status=200)
         else:
             return Response(ser.errors, status=400)
-        
+    
     def add(self, request, teacher_uuid):
         user = request.user
         teacher = get_object_or_404(Teacher, user__uuid=teacher_uuid)
@@ -53,6 +53,7 @@ class ProfileViewSet(ViewSet):
     def destroy(self, request):
         request.user.delete()
         return Response(status=200)
+
     
 @permission_classes([IsAuthenticated])
 class TeacherViewset(ViewSet):

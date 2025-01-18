@@ -74,6 +74,7 @@ class CourseSerializer(serializers.ModelSerializer):
             'exp_range', 
             'duration', 
             'number_of_lessons', 
+            'created_date',
             'school',
             'price'
         ]

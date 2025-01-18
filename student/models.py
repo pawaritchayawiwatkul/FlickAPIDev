@@ -178,7 +178,7 @@ class GuestLesson(models.Model):
     code = models.CharField(max_length=12, unique=True)
     status = models.CharField(choices=STATUS_CHOICES, max_length=3, default="PEN")
     online = models.BooleanField(default=False)
-    teacher = models.ForeignKey(Teacher, on_delete=models.CASCADE)
+    teacher = models.ForeignKey(Teacher, on_delete=models.CASCADE, related_name="guestlesson")
     teacher_event_id = models.CharField(null=True, blank=True)
     notified = models.BooleanField(default=False)
     

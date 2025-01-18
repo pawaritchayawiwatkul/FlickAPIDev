@@ -22,7 +22,7 @@ from dateutil.parser import isoparse  # Use this for ISO 8601 parsing
 
 _timezone =  timezone.get_current_timezone()
 gmt7 = pytz.timezone('Asia/Bangkok')
-print(_timezone)
+
 @permission_classes([IsAuthenticated])
 class UnavailableTimeViewset(ViewSet):
     def one_time(self, request):

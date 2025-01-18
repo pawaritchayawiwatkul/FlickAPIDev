@@ -23,7 +23,7 @@ BASE_DIR = Path(__file__).resolve().parent
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY")
 FERNET_KEY =  os.getenv("FERNET_SECRET_KEY")
 ALLOWED_HOSTS = ["*"]
-APPEND_SLASH=True 
+APPEND_SLASH = True 
 
 TIME_ZONE = 'UTC'  # Set this to your desired timezone
 USE_TZ = True
