@@ -1,23 +1,20 @@
 from rest_framework import serializers
 from student.models import CourseRegistration
-
 from rest_framework import serializers
 from student.models import CourseRegistration, Student
 from teacher.models import Teacher
 from school.models import Course
+import datetime
+from dateutil.relativedelta import relativedelta
 
 class CourseRegistrationSerializer(serializers.ModelSerializer):
     teacher_uuid = serializers.UUIDField(write_only=True, required=True)
     course_uuid = serializers.UUIDField(write_only=True, required=True)  # Added course_uuid
-    exp_date = serializers.DateField(required=True)
-    used_lessons = serializers.IntegerField(required=True)
-    discount = serializers.FloatField(required=False)
+    discount = serializers.FloatField()
 
     class Meta:
         model = CourseRegistration
         fields = [
-            'exp_date', 
-            'used_lessons', 
             'discount', 
             'student',
             'teacher_uuid', 
@@ -33,10 +30,16 @@ class CourseRegistrationSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({"teacher_uuid": "Teacher with this UUID does not exist."})
         data['teacher'] = teacher
 
+        # Set EXP Date
+        data['registered_date'] = datetime.date.today()
         # Validate course existence
         course_uuid = data.pop('course_uuid')
         try:
             course = Course.objects.get(uuid=course_uuid)
+            data['used_lessons'] = course.number_of_lessons
+            if not course.no_exp:
+                data['exp_date'] = data['registered_date'] + relativedelta(months=course.exp_range)
+
         except Course.DoesNotExist:
             raise serializers.ValidationError({"course_uuid": "Course with this UUID does not exist."})
         data['course'] = course
@@ -46,7 +49,6 @@ class CourseRegistrationSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError({"discount": "Discount is required"})
             else:
                 data['paid_price'] = course.price - discount
-
         return data
 
     def create(self, validated_data):

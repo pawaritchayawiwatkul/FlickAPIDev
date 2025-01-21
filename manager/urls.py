@@ -66,5 +66,4 @@ urlpatterns = format_suffix_patterns([
     path('client/<slug:uuid>/registration', clientRegistrationViewSet, name='client-registration'),
 
     path('course', courseViewSet, name='course'),
-
 ])
