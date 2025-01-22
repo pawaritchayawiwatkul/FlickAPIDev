@@ -36,7 +36,7 @@ class CourseRegistrationSerializer(serializers.ModelSerializer):
         course_uuid = data.pop('course_uuid')
         try:
             course = Course.objects.get(uuid=course_uuid)
-            data['used_lessons'] = course.number_of_lessons
+            data['lessons_left'] = course.number_of_lessons
             if not course.no_exp:
                 data['exp_date'] = data['registered_date'] + relativedelta(months=course.exp_range)
 

@@ -19,3 +19,4 @@ redis==5.2.0
 celery-singleton==0.3.1
 google-auth-oauthlib==1.2.1
 django-cors-headers==4.6.0
+twilio==9.4.3

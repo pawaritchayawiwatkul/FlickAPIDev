@@ -80,7 +80,8 @@ lessonStatusView = views.LessonViewset.as_view({
 })
 
 studentListView = views.StudentViewset.as_view({
-    'get': 'list'
+    'get': 'list',
+    'post': 'create'
 })
 
 studentDetailView = views.StudentViewset.as_view({

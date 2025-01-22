@@ -12,6 +12,10 @@ from django.utils.timezone import now
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth.hashers import make_password, check_password
 from utils.sms import SMSClient
+from django.core.cache import cache
+import hashlib
+import secrets
+
 # Create your views here.
 
 
@@ -26,14 +30,22 @@ def forgot_password(request, uuid, token):
 
 
 @api_view(['GET'])
-def check_usertype(request):
+def check_usertype(request, type):
+    if type == 'teacher':
+        filters = {'is_teacher': True}
+    elif type == 'student':
+        filters = {'is_teacher': False}
+    else:
+        return Response({'error': 'Invalid user type'}, status=400)
+    
     phone_number = request.GET.get('phone_number')
-
     if not phone_number:
         return Response({'error': 'Phone number is required'}, status=400)
 
+    filters['phone_number'] = phone_number
+    filters['is_manager'] = False
     try:
-        user = User.objects.get(phone_number=phone_number)  # Assuming phone_number is a field in the User model
+        user = User.objects.get(**filters)  # Assuming phone_number is a field in the User model
     except User.DoesNotExist:
         return Response({'user_type': 0})  # User not found
 
@@ -75,7 +87,7 @@ class OTPViewSet(ViewSet):
 
         # Mock sending OTP (replace with real SMS/email integration)
         print(f"Sending OTP {otp} to {phone_number}")
-        smsManager.send_sms("66", phone_number, f"OTP: {otp}")
+        smsManager.send_sms("66", phone_number, f"Your MindChoice OTP is: {otp}. Use this to verify your account. Do not share this code with anyone.")
         return Response({'message': 'OTP sent successfully'}, status=status.HTTP_200_OK)
 
     def check(self, request):
@@ -90,13 +102,26 @@ class OTPViewSet(ViewSet):
         except User.DoesNotExist:
             return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
 
-
         if user.otp == otp and user.otp_created_at:
             if (now() - user.otp_created_at).total_seconds() <= 300:
-                user.otp = None  # Clear OTP after successful verification
+                # Generate a temporary key for setting the PIN
+                # Generate a more complex temporary key
+                secret_key = secrets.token_hex(16)  # Generate a secure random secret key
+
+                raw_key = f"{phone_number}:{secret_key}"
+                temp_key = hashlib.sha256(raw_key.encode()).hexdigest()
+                
+                cache.set(temp_key, True, timeout=300)  # Valid for 5 minutes
+
+                # Clear OTP after successful verification
+                user.otp = None
                 user.otp_created_at = None
                 user.save()
-                return Response({'message': 'OTP verified successfully'}, status=status.HTTP_200_OK)
+
+                return Response({
+                    'message': 'OTP verified successfully',
+                    'temp_key': raw_key
+                }, status=status.HTTP_200_OK)
         else:
             return Response({'error': 'Invalid or expired OTP'}, status=status.HTTP_400_BAD_REQUEST)
         
@@ -132,11 +157,23 @@ class PinViewSet(ViewSet):
     def set_pin(self, request):
         phone_number = request.data.get('phone_number')
         pin = request.data.get('pin')
+        temp_key = request.data.get('temp_key')
 
-        if not phone_number or not pin:
-            return Response({'error': 'Phone number and new PIN are required.'}, status=status.HTTP_400_BAD_REQUEST)
+        if not phone_number or not pin or not temp_key:
+            return Response({'error': 'Phone number, PIN, and temp key are required.'}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
+            # Extract and validate the phone number from the temp_key
+            temp_key_parts = temp_key.split(':')
+            if temp_key_parts[0] != phone_number:
+                return Response({'error': 'Invalid temp key for the given phone number.'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            hased_temp = hashlib.sha256(temp_key.encode()).hexdigest()
+            # Validate the temp_key in cache
+            if not cache.get(hased_temp):
+                return Response({'error': 'Invalid or expired temp key.'}, status=status.HTTP_400_BAD_REQUEST)
+
+            # Fetch user by phone number
             user = User.objects.get(phone_number=phone_number)
         except User.DoesNotExist:
             return Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
@@ -145,10 +182,14 @@ class PinViewSet(ViewSet):
         user.pin = make_password(pin)  # Hash the PIN for security
         user.save()
 
+        # Invalidate the temp key
+        cache.delete(temp_key)
+
+        # Generate JWT tokens
         refresh = RefreshToken.for_user(user)
         access_token = str(refresh.access_token)
 
         return Response({
             'access': access_token,
             'refresh': str(refresh),
-        }, status=status.HTTP_200_OK)    
+        }, status=status.HTTP_200_OK)

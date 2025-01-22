@@ -34,7 +34,7 @@ class ListCourseRegistrationSerializer(serializers.ModelSerializer):
     number_of_lessons = serializers.IntegerField(source="course.number_of_lessons")
     class Meta:
         model = CourseRegistration
-        fields = ("name", "description", "used_lessons", "number_of_lessons", "student_favorite", "uuid", "exp_date")
+        fields = ("name", "description", "lessons_left", "number_of_lessons", "student_favorite", "uuid", "exp_date")
 
 class ListLessonDateTimeSerializer(serializers.ModelSerializer):
     duration = serializers.IntegerField(source="registration.course.duration")
@@ -77,6 +77,7 @@ class CourseRegistrationSerializer(serializers.Serializer):
             attrs['student'] = student
             attrs['teacher'] = teacher
             attrs['course_id'] = course.id
+            attrs['lessons_left'] = course.number_of_lessons
         except Student.DoesNotExist:
             raise serializers.ValidationError({
                 'user_id': 'User not found'

@@ -33,7 +33,7 @@ class InsightViewSet(ViewSet):
 
         # Prepare the analysis dictionary
         analysis = {
-            "earnings_amount":total_earnings,
+            "earnings_amount": total_earnings,
             "staffs": school_analytics.staffs or 0,
             "clients": school_analytics.clients or 0,
             "weekly_class": school_analytics.weekly_class or 0,
@@ -199,7 +199,8 @@ class StaffViewSet(ViewSet):
                 "first_name": teacher.user.first_name,
                 "last_name": teacher.user.last_name,
                 "uuid": teacher.user.uuid,
-                "email": teacher.user.phone_number,
+                "phone_number": teacher.user.phone_number,
+                "email": teacher.user.email,
             }
             for teacher in school.teacher.all()
         ]
@@ -297,7 +298,7 @@ class StaffViewSet(ViewSet):
         
         try:
             # Create the User instance
-            user = user_serializer.save(is_teacher=True, is_admin=False, is_active=True)
+            user = user_serializer.save(is_teacher=True)
 
             # Create the Teacher instance and associate with the School
             Teacher.objects.create(user=user, school=admin.school)
@@ -389,7 +390,7 @@ class ClientViewSet(ViewSet):
         
         try:
             # Create the User instance
-            user = user_serializer.save(is_teacher=True, is_admin=False, is_active=True)
+            user = user_serializer.save(is_teacher=True, is_admin=False)
 
             # Create the Teacher instance and associate with the School
             student = Student.objects.create(user=user)

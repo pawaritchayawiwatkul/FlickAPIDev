@@ -19,6 +19,8 @@ from django.db.models import Prefetch
 from django.core.mail import send_mail
 import pytz
 from dateutil.parser import isoparse  # Use this for ISO 8601 parsing
+from core.serializers import CreateUserSerializer
+from rest_framework import status
 
 _timezone =  timezone.get_current_timezone()
 gmt7 = pytz.timezone('Asia/Bangkok')
@@ -202,6 +204,33 @@ class SchoolViewSet(ViewSet):
 
 @permission_classes([IsAuthenticated])
 class StudentViewset(ViewSet):
+    def create(self, request):
+        # Retrieve the Admin instance for the logged-in user
+        teacher = Teacher.objects.select_related('school').filter(user_id=request.user.id).first()
+        if not teacher:
+            return Response({"error": "Teacher not found for the current user."}, status=404)
+
+        # Deserialize the request data for the User (teacher) creation
+        user_serializer = CreateUserSerializer(data=request.data)
+        if not user_serializer.is_valid():
+            return Response(user_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            # Create the User instance
+            user = user_serializer.save(is_teacher=True, is_admin=False)
+
+            # Create the Teacher instance and associate with the School
+            student = Student.objects.create(user=user)
+            student.school.add(teacher.school)
+
+            return Response({
+                "success": True, 
+                 "message": "Client created successfully.",
+                 }, status=status.HTTP_201_CREATED)
+        except Exception as e:
+            print(e)
+            return Response({"email": "already exist"}, status=status.HTTP_400_BAD_REQUEST)
+        
     def update(self, request, code):
         ser = TeacherStudentUpdateSerializer(data=request.data)
         if ser.is_valid():
@@ -333,6 +362,7 @@ class RegistrationViewset(ViewSet):
         filters = {
             'teacher__user_id': request.user.id,
         }
+        print(filters)
         student_uuid = request.GET.get("student_uuid")
         if student_uuid:
             # Assuming you have a Teacher model with a UUID field
@@ -340,6 +370,7 @@ class RegistrationViewset(ViewSet):
             filters['student'] = student
 
         courses = CourseRegistration.objects.select_related("course").filter(**filters)
+        print(courses)
         ser = ListCourseRegistrationSerializer(instance=courses, many=True)
         return Response(ser.data)
     
@@ -371,11 +402,10 @@ class LessonViewset(ViewSet):
             return Response({'failed': "No Lesson matches the given query."}, status=400)
 
         now = timezone.now()
-        time_difference = lesson.booked_datetime - now
-
-        if time_difference.total_seconds() >= 24 * 60 * 60:
-            lesson.registration.used_lessons -= 1
-            lesson.registration.save()
+        # time_difference = lesson.booked_datetime - now
+        # if time_difference.total_seconds() >= 24 * 60 * 60:
+        #     lesson.registration.used_lessons += 1
+        #     lesson.registration.save()
         lesson.status = 'CAN'
         lesson.save()
 
@@ -432,7 +462,7 @@ class LessonViewset(ViewSet):
         
         lesson.status = 'COM'
         lesson.save()
-        lesson.registration.used_lessons += 1
+        lesson.registration.lessons_left -= 1
         lesson.registration.save()
         
         gmt_time = lesson.booked_datetime.astimezone(gmt7)

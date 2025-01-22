@@ -23,7 +23,7 @@ class CourseRegistration(models.Model):
     finised_date = models.DateField(null=True, blank=True)
 
     status = models.CharField(choices=STATUS_CHOICES, max_length=3, default="PEN")
-    used_lessons = models.IntegerField(default=0)
+    lessons_left = models.IntegerField(default=0)
 
     student_favorite = models.BooleanField(default=False)
     teacher_favorite = models.BooleanField(default=False)

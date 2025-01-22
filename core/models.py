@@ -21,14 +21,10 @@ class CustomUserManager(BaseUserManager):
 
     def create_superuser(self, email, password, **extra_fields):
         extra_fields.setdefault('is_staff', True)
-        extra_fields.setdefault('is_superuser', True)
-        extra_fields.setdefault('is_active', True)
         extra_fields.setdefault('is_admin', True)
-
+        
         if extra_fields.get('is_staff') is not True:
             raise ValueError(_("Superuser must have is_staff=True. "))
-        elif extra_fields.get('is_superuser') is not True:
-            raise ValueError(_("Superuser must have is_superuser=True. "))
         elif extra_fields.get('is_admin') is not True:
             raise ValueError(_("Superuser must have is_admin=True. "))
         
@@ -58,20 +54,23 @@ class User(AbstractBaseUser, PermissionsMixin):
 
     is_teacher = BooleanField(default=True)
     is_admin = BooleanField(default=False)
+    is_manager = BooleanField(default=False)
+    
     is_staff = BooleanField(
         _("staff status"),
         default=False,
         help_text=_("Designates whether the user can log into this admin site."),
     )
     
-    is_active = BooleanField(
-        _("active"),
-        default=True,
-        help_text=_(
-            "Designates whether this user should be treated as active. "
-            "Unselect this instead of deleting accounts."
-        ),
-    )
+    # is_active = BooleanField(
+    #     _("active"),
+    #     default=True,
+    #     help_text=_(
+    #         "Designates whether this user should be treated as active. "
+    #         "Unselect this instead of deleting accounts."
+    #     ),
+    # )
+
     objects = CustomUserManager()
     google_credentials = models.JSONField(null=True, blank=True)
     google_calendar_id = models.CharField(null=True, blank=True)

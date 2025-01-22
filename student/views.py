@@ -88,13 +88,11 @@ class CourseViewset(ViewSet):
             return Response({"error_messages": ["Invalid Request"]}, status=400)
     
     def list(self, request):
-        teacher_uuid = request.GET.get("teacher_uuid")
-        if not teacher_uuid:
-            return Response({"error_messages": ["Please Techer ID"]}, status=400)
         filters = {
             'student__user_id': request.user.id,
         }
-
+        
+        teacher_uuid = request.GET.get("teacher_uuid")
         if teacher_uuid:
             # Assuming you have a Teacher model with a UUID field
             teacher = get_object_or_404(Teacher, user__uuid=teacher_uuid)
@@ -185,9 +183,9 @@ class LessonViewset(ViewSet):
         time_difference = lesson.booked_datetime - now
 
         # Ensure the cancellation is at least 24 hours before the class
-        if time_difference.total_seconds() >= 24 * 60 * 60:
-            lesson.registration.used_lessons -= 1
-            lesson.registration.save()
+        # if time_difference.total_seconds() >= 24 * 60 * 60:
+        #     lesson.registration.lessons_left += 1
+        #     lesson.registration.save()
         lesson.status = 'CAN'
         lesson.save()
 

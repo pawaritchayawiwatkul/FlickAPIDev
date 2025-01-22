@@ -1,43 +1,44 @@
-import requests
-import os 
+from twilio.rest import Client
+import os
 
 class SMSClient:
     def __init__(self):
         """
-        Initializes the SMSClient with the base URL, access key ID, and token.
-        
-        :param access_key_id: Your access key ID for authentication
-        :param access_key_token: Your access key token for authentication
+        Initializes the SMSClient with Twilio credentials.
         """
-        self.headers = {
-            'accept': '*/*',
-            "Access-Key-ID": os.getenv("TDC_SMS_ACCESS_ID"),
-            "Access-Key-Token": os.getenv("TDC_SMS_ACCESS_TOKEN"),
-            'Content-Type': 'application/json'
-        }
+        self.account_sid = os.getenv("TWILIO_ACCOUNT_SID")  # Twilio Account SID
+        self.auth_token = os.getenv("TWILIO_AUTH_TOKEN")    # Twilio Auth Token
+        self.twilio_phone_number = os.getenv("TWILIO_PHONE_NUMBER")  # Twilio Phone Number
+        self.client = Client(self.account_sid, self.auth_token)
 
     def send_sms(self, phone_code, phone_number, message):
         """
-        Sends an SMS message using the API.
+        Sends an SMS message using the Twilio API.
 
         :param phone_code: Country code (e.g., "66" for Thailand)
         :param phone_number: The recipient's phone number
-        :param sender_id: The sender's ID (e.g., "TDC")
         :param message: The SMS message content
-        :return: The API response
+        :return: The Twilio API response
         """
-
-        body = {
-            "phoneCode": phone_code,
-            "phoneNumber": phone_number,
-            "senderId": "MNDC2025",
-            "message": message,
-        }
         try:
-            response = requests.post("https://mooping-openapi.thaidata.cloud/v1.1/sms-simple", headers=self.headers, json=body)
-            response.raise_for_status()  # Raise an error for HTTP status codes >= 400
-            return response.json()  # Return the JSON response if successful
-        except requests.exceptions.RequestException as e:
+            # Combine the phone code and phone number
+            full_phone_number = f"+{phone_code}{phone_number}"
+
+            # Send the SMS via Twilio
+            message_response = self.client.messages.create(
+                to=full_phone_number,
+                from_=self.twilio_phone_number,
+                body=message
+            )
+
+            # Return the Twilio response details
+            return {
+                "sid": message_response.sid,
+                "status": message_response.status,
+                "date_created": message_response.date_created,
+                "to": message_response.to,
+                "from": message_response.from_,
+            }
+        except Exception as e:
             print(f"Error sending SMS: {e}")
-            print(e.response.text)
             return None
