@@ -12,7 +12,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.viewsets import ViewSet
 from django.db.models import Prefetch
-from utils import merge_schedule, compute_available_time, is_available, send_notification, create_calendar_event, delete_google_calendar_event, send_lesson_confirmation_email, send_cancellation_email_html
+from utils.util import merge_schedule, compute_available_time, is_available, send_notification, create_calendar_event, delete_google_calendar_event, send_lesson_confirmation_email, send_cancellation_email_html
 from django.utils import timezone
 from datetime import datetime, timedelta
 from django.db.models import Prefetch

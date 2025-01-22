@@ -13,7 +13,7 @@ from django.core.exceptions import ValidationError
 from student.serializers import GuestLessonSerializer, ListLessonSerializer, CourseRegistrationSerializer, LessonSerializer, ListTeacherSerializer, ListCourseRegistrationSerializer, ListLessonDateTimeSerializer, ProfileSerializer
 from django.shortcuts import get_object_or_404
 from django.shortcuts import render
-from utils import compute_available_time, is_available, send_notification, create_calendar_event, delete_google_calendar_event, send_lesson_requested_email
+from utils.util import compute_available_time, is_available, send_notification, create_calendar_event, delete_google_calendar_event, send_lesson_requested_email
 from django.core.mail import send_mail
 import pytz
 from dateutil.parser import isoparse  # Use this for ISO 8601 parsing

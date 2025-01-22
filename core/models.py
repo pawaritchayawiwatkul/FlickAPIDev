@@ -51,6 +51,11 @@ class User(AbstractBaseUser, PermissionsMixin):
     )
     uuid = UUIDField(default=uuid.uuid4, editable=False, unique=True)
 
+    otp = models.CharField(max_length=6, null=True, blank=True)
+    otp_created_at = models.DateTimeField(null=True, blank=True)
+    
+    pin = models.CharField(max_length=128, blank=True, null=True)  # Store hashed PINs
+
     is_teacher = BooleanField(default=True)
     is_admin = BooleanField(default=False)
     is_staff = BooleanField(

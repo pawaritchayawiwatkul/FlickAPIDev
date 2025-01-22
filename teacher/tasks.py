@@ -4,7 +4,7 @@ from student.models import Lesson, GuestLesson
 from datetime import timedelta
 from django.utils import timezone
 from pytz import timezone as ptimezone
-from utils import send_notification
+from utils.util import send_notification
 from celery_singleton import Singleton
 import pytz
 

@@ -17,12 +17,31 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import path
 from django.urls import path, include
-from core.views import forgot_password, account_activation, activate_account
+from core.views import forgot_password, check_usertype, OTPViewSet, PinViewSet
 
+otpSend = OTPViewSet.as_view({
+    'post': 'send',
+})
+
+otpCheck = OTPViewSet.as_view({
+    'post': 'check',
+})
+
+pinSet = PinViewSet.as_view({
+    'post': 'set_pin'
+})
+
+pinCheck = PinViewSet.as_view({
+    'post': 'check'
+})
 
 urlpatterns = [
     path('password/reset/confirm/<slug:uuid>/<slug:token>/', forgot_password, name='forgot-password'),
-    path('users/activate_request/<slug:uuid>/<slug:token>/', account_activation, name='activation'),
+    path('otp/send', otpSend, name='otp-send'),
+    path('otp/check', otpCheck, name='otp-check'),
+    path('pin/set', pinSet, name='pin-set'),
+    path('pin/check', pinCheck, name='pin-check'),
+    path('usertype', check_usertype, name='check-usertype')
 ]
 
 # if settings.DEBUG:
