@@ -98,6 +98,10 @@ class CourseViewset(ViewSet):
             teacher = get_object_or_404(Teacher, user__uuid=teacher_uuid)
             filters['teacher'] = teacher
 
+        has_l_left = request.GET.get("has_lesson_left")
+        if has_l_left == "true":
+            filters['lessons_left__gt'] = 0
+            
         courses = CourseRegistration.objects.select_related("course").filter(**filters)
         ser = ListCourseRegistrationSerializer(instance=courses, many=True)
         return Response(ser.data)

@@ -16,11 +16,11 @@ from utils.util import merge_schedule, compute_available_time, is_available, sen
 from django.utils import timezone
 from datetime import datetime, timedelta
 from django.db.models import Prefetch
-from django.core.mail import send_mail
 import pytz
 from dateutil.parser import isoparse  # Use this for ISO 8601 parsing
 from core.serializers import CreateUserSerializer
 from rest_framework import status
+from django.db.utils import IntegrityError
 
 _timezone =  timezone.get_current_timezone()
 gmt7 = pytz.timezone('Asia/Bangkok')
@@ -209,7 +209,7 @@ class StudentViewset(ViewSet):
         teacher = Teacher.objects.select_related('school').filter(user_id=request.user.id).first()
         if not teacher:
             return Response({"error": "Teacher not found for the current user."}, status=404)
-
+        
         # Deserialize the request data for the User (teacher) creation
         user_serializer = CreateUserSerializer(data=request.data)
         if not user_serializer.is_valid():
@@ -217,20 +217,36 @@ class StudentViewset(ViewSet):
         
         try:
             # Create the User instance
-            user = user_serializer.save(is_teacher=True, is_admin=False)
+            user = user_serializer.save(is_teacher=False, is_admin=False)
 
-            # Create the Teacher instance and associate with the School
+            # Create the Student instance and associate it with the School
             student = Student.objects.create(user=user)
             student.school.add(teacher.school)
-
+            StudentTeacherRelation.objects.create(
+                student=student,
+                teacher=teacher,
+                student_first_name=student.user.first_name,
+                student_last_name=student.user.last_name,
+            )            
             return Response({
                 "success": True, 
-                 "message": "Client created successfully.",
-                 }, status=status.HTTP_201_CREATED)
+                "message": "Client created successfully.",
+            }, status=status.HTTP_201_CREATED)
+        except IntegrityError as e:
+            # Check the exception message for details
+            error_message = str(e)
+            print(e)
+
+            if "core_user_email_key" in error_message:
+                return Response({"email": "This email is already in use."}, status=status.HTTP_400_BAD_REQUEST)
+            elif "core_user_phone_number" in error_message:  # Example constraint for phone number
+                return Response({"phone": "This phone number is already in use."}, status=status.HTTP_400_BAD_REQUEST)
+            else:
+                return Response({"error": "A unique constraint was violated."}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
             print(e)
-            return Response({"email": "already exist"}, status=status.HTTP_400_BAD_REQUEST)
-        
+            return Response({"error": "An error occurred while creating the client."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
     def update(self, request, code):
         ser = TeacherStudentUpdateSerializer(data=request.data)
         if ser.is_valid():
@@ -245,7 +261,7 @@ class StudentViewset(ViewSet):
             return Response(status=200)
         else:
             return Response(ser.errors, status=400)
-    
+        
     def add(self, request, code):
         try:
             student = Student.objects.select_related("user").get(user__uuid=code)
@@ -368,6 +384,10 @@ class RegistrationViewset(ViewSet):
             # Assuming you have a Teacher model with a UUID field
             student = get_object_or_404(Student, user__uuid=student_uuid)
             filters['student'] = student
+        
+        has_l_left = request.GET.get("has_lesson_left")
+        if has_l_left == "true":
+            filters['lessons_left__gt'] = 0
 
         courses = CourseRegistration.objects.select_related("course").filter(**filters)
         print(courses)

@@ -41,7 +41,7 @@ urlpatterns = [
     path('otp/check', otpCheck, name='otp-check'),
     path('pin/set', pinSet, name='pin-set'),
     path('pin/check', pinCheck, name='pin-check'),
-    path('usertype', check_usertype, name='check-usertype')
+    path('usertype/<slug:type>', check_usertype, name='check-usertype')
 ]
 
 # if settings.DEBUG:

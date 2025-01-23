@@ -55,21 +55,21 @@ class User(AbstractBaseUser, PermissionsMixin):
     is_teacher = BooleanField(default=True)
     is_admin = BooleanField(default=False)
     is_manager = BooleanField(default=False)
-    
+
     is_staff = BooleanField(
         _("staff status"),
         default=False,
         help_text=_("Designates whether the user can log into this admin site."),
     )
     
-    # is_active = BooleanField(
-    #     _("active"),
-    #     default=True,
-    #     help_text=_(
-    #         "Designates whether this user should be treated as active. "
-    #         "Unselect this instead of deleting accounts."
-    #     ),
-    # )
+    is_active = BooleanField(
+        _("active"),
+        default=True,
+        help_text=_(
+            "Designates whether this user should be treated as active. "
+            "Unselect this instead of deleting accounts."
+        ),
+    )
 
     objects = CustomUserManager()
     google_credentials = models.JSONField(null=True, blank=True)

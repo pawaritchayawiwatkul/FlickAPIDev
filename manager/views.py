@@ -10,6 +10,7 @@ from manager.models import Admin
 from manager.serializers import CourseRegistrationSerializer, CourseSerializer
 from core.serializers import CreateUserSerializer, UserUpdateSerializer
 from rest_framework import status
+from django.db.utils import IntegrityError
 
 class InsightViewSet(ViewSet):
     permission_classes = [IsAuthenticated]
@@ -305,10 +306,21 @@ class StaffViewSet(ViewSet):
 
 
             return Response(user_serializer.data, status=status.HTTP_201_CREATED)
+        except IntegrityError as e:
+            # Check the exception message for details
+            error_message = str(e)
+            print(e)
+
+            if "core_user_email_key" in error_message:
+                return Response({"email": "This email is already in use."}, status=status.HTTP_400_BAD_REQUEST)
+            elif "core_user_phone_number" in error_message:  # Example constraint for phone number
+                return Response({"phone": "This phone number is already in use."}, status=status.HTTP_400_BAD_REQUEST)
+            else:
+                return Response({"error": "A unique constraint was violated."}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
             print(e)
-            return Response({"email": "already exist"}, status=status.HTTP_400_BAD_REQUEST)
-    
+            return Response({"error": "An error occurred while creating the client."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
 class ClientViewSet(ViewSet):
     permission_classes = [IsAuthenticated]
 
@@ -400,9 +412,21 @@ class ClientViewSet(ViewSet):
                 "success": True, 
                  "message": "Client created successfully.",
                  }, status=status.HTTP_201_CREATED)
-        except:
-            return Response({"email": "already exist"}, status=status.HTTP_400_BAD_REQUEST)
-    
+        except IntegrityError as e:
+            # Check the exception message for details
+            error_message = str(e)
+            print(e)
+
+            if "core_user_email_key" in error_message:
+                return Response({"email": "This email is already in use."}, status=status.HTTP_400_BAD_REQUEST)
+            elif "core_user_phone_number" in error_message:  # Example constraint for phone number
+                return Response({"phone": "This phone number is already in use."}, status=status.HTTP_400_BAD_REQUEST)
+            else:
+                return Response({"error": "A unique constraint was violated."}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            print(e)
+            return Response({"error": "An error occurred while creating the client."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
     def edit(self, request, uuid):
         # Retrieve the Admin instance for the logged-in user
         admin = Admin.objects.select_related('school').filter(user_id=request.user.id).first()
