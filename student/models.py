@@ -11,18 +11,12 @@ import string
 _timezone = get_current_timezone()
 
 class CourseRegistration(models.Model):
-    STATUS_CHOICES = [
-        ('PEN', 'Pending'),
-        ('COM', 'Completed'),
-        ('EXP', 'Expired'),
-    ]
     uuid = models.UUIDField(default=uuid4, editable=False, unique=True)
 
     registered_date = models.DateField(auto_now_add=True)
     exp_date = models.DateField(null=True)
     finised_date = models.DateField(null=True, blank=True)
 
-    status = models.CharField(choices=STATUS_CHOICES, max_length=3, default="PEN")
     lessons_left = models.IntegerField(default=0)
 
     student_favorite = models.BooleanField(default=False)
@@ -34,6 +28,8 @@ class CourseRegistration(models.Model):
     
     paid_price = models.FloatField(null=True)
     discount = models.FloatField(null=True)
+    payment_slip = models.ImageField(null=True, blank=True)
+    payment_validated = models.BooleanField(default=False)
 
     def __str__(self) -> str:
         return f"{self.student.__str__()} {self.course.__str__()} {self.teacher.__str__()}"

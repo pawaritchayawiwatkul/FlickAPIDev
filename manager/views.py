@@ -152,7 +152,7 @@ class CourseRegistrationViewSet(ViewSet):
 
                 # Format the purchase details
                 purchases.append({
-                    "id": registration.id,  # Assuming the ID of registration is needed
+                    "uuid": registration.uuid,  # Assuming the ID of registration is needed
                     "student_first_name": student.user.first_name,
                     "student_last_name": student.user.last_name,
                     # "avatar_url": student.avatar_url if student.avatar_url else "default-avatar-url",  # Handle missing avatar
@@ -160,11 +160,35 @@ class CourseRegistrationViewSet(ViewSet):
                     "registered_date": registration.registered_date.isoformat(),  # Use booked datetime for the purchase time
                     "course_name": course.name,
                     "course_uuid": course.uuid,
-                    "amount": f"${registration.paid_price:.2f}" if registration.paid_price else 0.0  # Assuming the `amount` field is on registration and formatted as needed
+                    "amount": f"${registration.paid_price:.2f}" if registration.paid_price else 0.0,  # Assuming the `amount` field is on registration and formatted as needed
+                    "payment_slip": registration.payment_slip.url if registration.payment_slip else "",  # Assuming the payment slip is a file field,
+                    "payment_validated": registration.payment_validated,
                 })
 
         # Return the formatted response with purchases
         return Response({"purchases": purchases})
+    
+    def payment_validation(self, request, uuid):
+        # Retrieve the Admin instance for the logged-in user
+        admin = Admin.objects.filter(user_id=request.user.id).first()
+        if not admin:
+            return Response({"error": "Admin not found for the current user."}, status=404)
+
+        # Retrieve the registration by UUID
+        try:
+            registration = CourseRegistration.objects.get(uuid=uuid, course__school=admin.school)
+        except CourseRegistration.DoesNotExist:
+            return Response({"error": "Registration not found."}, status=404)
+
+        # Get the validated status from request data
+        validated = request.data.get('validated')
+        if validated is None:
+            return Response({"error": "Validation status is required."}, status=400)
+        # Validate the payment based on the input
+        registration.payment_validated = validated
+        registration.save()
+
+        return Response({"message": "Payment validation status updated successfully."}, status=200)
 
 class StaffViewSet(ViewSet):
     permission_classes = [IsAuthenticated]

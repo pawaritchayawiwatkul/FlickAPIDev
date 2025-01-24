@@ -16,6 +16,10 @@ registrationViewSet = views.CourseRegistrationViewSet.as_view({
     'get': "list"
 })
 
+paymentViewset = views.CourseRegistrationViewSet.as_view({
+    'put': "payment_validation"
+})
+
 staffViewSet = views.StaffViewSet.as_view({
     'get': "list",
     "post": "create"
@@ -56,6 +60,7 @@ urlpatterns = format_suffix_patterns([
 
     path('calendar/month', calendarViewSet, name='profile-add'),
     path('purchase', registrationViewSet, name='purchase'),
+    path('purchase/<slug:uuid>/payment-validation', paymentViewset, name='purchase'),
 
     path('staff', staffViewSet, name='staff-list'),
     path('staff/<slug:uuid>', staffDetailViewSet, name='staff-detail'),

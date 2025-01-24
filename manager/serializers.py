@@ -19,6 +19,12 @@ class CourseRegistrationSerializer(serializers.ModelSerializer):
             'student',
             'teacher_uuid', 
             'course_uuid',  # Include course_uuid
+            'registered_date',
+            'exp_date',
+            'lessons_left',
+            'paid_price',
+            'payment_slip',
+            'payment_validated'
         ]
 
     def validate(self, data):
