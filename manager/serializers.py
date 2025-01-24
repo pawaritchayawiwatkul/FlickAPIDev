@@ -24,7 +24,7 @@ class CourseRegistrationSerializer(serializers.ModelSerializer):
             'lessons_left',
             'paid_price',
             'payment_slip',
-            'payment_validated'
+            'payment_status'
         ]
 
     def validate(self, data):

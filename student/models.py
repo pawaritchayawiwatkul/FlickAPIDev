@@ -10,7 +10,17 @@ import string
 # Create your models here.
 _timezone = get_current_timezone()
 
+def file_generate_upload_path(instance, filename):
+	# Both filename and instance.file_name should have the same values
+    return f"paymentslips/{instance.uuid}"
+
 class CourseRegistration(models.Model):
+    PAYMENT_STATUS_CHOICES = [
+        ('confirm', 'Confirm'),
+        ('waiting', 'Waiting'),
+        ('denied', 'Denied'),
+    ]
+
     uuid = models.UUIDField(default=uuid4, editable=False, unique=True)
 
     registered_date = models.DateField(auto_now_add=True)
@@ -28,12 +38,16 @@ class CourseRegistration(models.Model):
     
     paid_price = models.FloatField(null=True)
     discount = models.FloatField(null=True)
-    payment_slip = models.ImageField(null=True, blank=True)
-    payment_validated = models.BooleanField(default=False)
+    profile_image = models.FileField(
+        upload_to=file_generate_upload_path,
+        blank=True,
+        null=True
+    )    
+    payment_status = models.CharField(max_length=10, choices=PAYMENT_STATUS_CHOICES, default='waiting')
 
     def __str__(self) -> str:
         return f"{self.student.__str__()} {self.course.__str__()} {self.teacher.__str__()}"
-
+    
 class StudentTeacherRelation(models.Model):
     student = models.ForeignKey("Student", on_delete=models.CASCADE, related_name="teacher_relation")
     teacher = models.ForeignKey(Teacher, on_delete=models.CASCADE, related_name="student_relation")

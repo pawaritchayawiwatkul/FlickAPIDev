@@ -162,7 +162,7 @@ class CourseRegistrationViewSet(ViewSet):
                     "course_uuid": course.uuid,
                     "amount": f"${registration.paid_price:.2f}" if registration.paid_price else 0.0,  # Assuming the `amount` field is on registration and formatted as needed
                     "payment_slip": registration.payment_slip.url if registration.payment_slip else "",  # Assuming the payment slip is a file field,
-                    "payment_validated": registration.payment_validated,
+                    "payment_status": registration.payment_status,
                 })
 
         # Return the formatted response with purchases
@@ -180,16 +180,17 @@ class CourseRegistrationViewSet(ViewSet):
         except CourseRegistration.DoesNotExist:
             return Response({"error": "Registration not found."}, status=404)
 
-        # Get the validated status from request data
-        validated = request.data.get('validated')
-        if validated is None:
-            return Response({"error": "Validation status is required."}, status=400)
-        # Validate the payment based on the input
-        registration.payment_validated = validated
+        # Get the payment status from request data
+        payment_status = request.data.get('payment_status')
+        if payment_status not in ['confirm', 'waiting', 'denied']:
+            return Response({"error": "Valid payment status is required."}, status=400)
+
+        # Update the payment status based on the input
+        registration.payment_status = payment_status
         registration.save()
 
-        return Response({"message": "Payment validation status updated successfully."}, status=200)
-
+        return Response({"message": "Payment status updated successfully."}, status=200)
+    
 class StaffViewSet(ViewSet):
     permission_classes = [IsAuthenticated]
 
