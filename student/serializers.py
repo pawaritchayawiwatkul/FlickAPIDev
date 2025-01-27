@@ -1,20 +1,9 @@
 from rest_framework import serializers
-from student.models import Lesson, GuestLesson, CourseRegistration, Student, StudentTeacherRelation
+from student.models import Lesson, CourseRegistration, Student, StudentTeacherRelation
 from teacher.models import Teacher
 from school.models import Course
 from core.models import User
 
-class GuestLessonSerializer(serializers.ModelSerializer):
-    notes = serializers.CharField(max_length=300)
-    online = serializers.BooleanField(required=True)
-
-    class Meta:
-        model = GuestLesson
-        fields = ("notes", "name", "datetime", "duration", "online", "email")
-
-    def validate(self, attrs):
-        attrs['status'] = "PEN"
-        return attrs
     
 class ListTeacherSerializer(serializers.ModelSerializer):
     name = serializers.CharField(source="teacher.user.first_name")
@@ -32,6 +21,7 @@ class ListCourseRegistrationSerializer(serializers.ModelSerializer):
     name = serializers.CharField(source="course.name")
     description = serializers.CharField(source="course.description")
     number_of_lessons = serializers.IntegerField(source="course.number_of_lessons")
+    
     class Meta:
         model = CourseRegistration
         fields = ("name", "description", "lessons_left", "number_of_lessons", "student_favorite", "uuid", "exp_date")
@@ -56,6 +46,7 @@ class CourseRegistrationSerializer(serializers.Serializer):
     course_id = serializers.CharField()
     teacher_id = serializers.CharField()
     student_id = serializers.IntegerField()
+    location = serializers.CharField(source="course.school.location", read_only=True)
 
     def create(self, validated_data):
         regis = CourseRegistration.objects.create(**validated_data)
@@ -78,6 +69,7 @@ class CourseRegistrationSerializer(serializers.Serializer):
             attrs['teacher'] = teacher
             attrs['course_id'] = course.id
             attrs['lessons_left'] = course.number_of_lessons
+            attrs['location'] = course.school.location
         except Student.DoesNotExist:
             raise serializers.ValidationError({
                 'user_id': 'User not found'

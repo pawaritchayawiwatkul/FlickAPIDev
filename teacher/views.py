@@ -4,8 +4,8 @@ from rest_framework.decorators import permission_classes
 from rest_framework.viewsets import ViewSet
 from rest_framework.response import Response
 from teacher.models import Teacher, TeacherCourses
-from teacher.serializers import TeacherStudentUpdateSerializer, ListGuestLessonSerializer, StudentSearchSerializer, SchoolSerializer, UnavailableTimeSerializer, LessonSerializer, TeacherCourseDetailwithStudentSerializer, TeacherCourseDetailSerializer, RegularUnavailableSerializer, OnetimeUnavailableSerializer, UnavailableTimeOneTime, UnavailableTimeRegular, TeacherCourseListSerializer, CourseSerializer, ProfileSerializer, ListStudentSerializer, ListCourseRegistrationSerializer, CourseRegistrationSerializer, ListLessonSerializer
-from student.models import Student, StudentTeacherRelation, CourseRegistration, Lesson, GuestLesson
+from teacher.serializers import TeacherStudentUpdateSerializer, StudentSearchSerializer, SchoolSerializer, UnavailableTimeSerializer, LessonSerializer, TeacherCourseDetailwithStudentSerializer, TeacherCourseDetailSerializer, RegularUnavailableSerializer, OnetimeUnavailableSerializer, UnavailableTimeOneTime, UnavailableTimeRegular, TeacherCourseListSerializer, CourseSerializer, ProfileSerializer, ListStudentSerializer, ListCourseRegistrationSerializer, CourseRegistrationSerializer, ListLessonSerializer
+from student.models import Student, StudentTeacherRelation, CourseRegistration, Lesson
 from django.core.exceptions import ValidationError
 from rest_framework.views import Response
 from rest_framework.permissions import IsAuthenticated

@@ -2,7 +2,7 @@ import random
 import string
 from django.utils import timezone
 from datetime import datetime, timedelta
-from student.models import Lesson, GuestLesson
+from student.models import Lesson
 from teacher.models import UnavailableTimeOneTime
 from typing import List
 from rest_framework.response import Response
@@ -164,7 +164,7 @@ def merge_schedule(validated_data, unavailables):
     validated_data['stop'] = new_stop
     return validated_data, overlap
 
-def compute_available_time(unavailables:List[UnavailableTimeOneTime], lessons:List[Lesson], guest_lessons:List[GuestLesson], date_time, start, stop, duration):
+def compute_available_time(unavailables:List[UnavailableTimeOneTime], lessons:List[Lesson], date_time, start, stop, duration):
     duration = timedelta(minutes=duration)
     interval = timedelta(minutes=30)
     available_times = []
@@ -204,7 +204,7 @@ def compute_available_time(unavailables:List[UnavailableTimeOneTime], lessons:Li
         current_time += interval
     return available_times
 
-def is_available(unavailables:List[UnavailableTimeOneTime], lessons:List[Lesson], guest_lessons:List[GuestLesson], date_time, start, stop, duration):
+def is_available(unavailables:List[UnavailableTimeOneTime], lessons:List[Lesson], date_time, start, stop, duration):
     start_time = date_time
     end_time = start_time + timedelta(minutes=duration)
     school_start = timezone.make_aware(datetime.combine(date_time, start), timezone=gmt7)

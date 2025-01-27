@@ -1,21 +1,21 @@
-from django.urls import path , re_path
+from django.urls import path , include
 from student import views
 from rest_framework.urlpatterns import format_suffix_patterns
 
 app_name = 'student'
 
-courseView = views.CourseViewset.as_view({
+courseView = views.RegistrationViewSet.as_view({
     'get': 'list',
 })
 
-courseDetailView = views.CourseViewset.as_view({
+courseDetailView = views.RegistrationViewSet.as_view({
     'get': 'retrieve',
 })
 
-courseFavoriteView = views.CourseViewset.as_view({
+courseFavoriteView = views.RegistrationViewSet.as_view({
     'put': 'favorite'
 })
-courseATview = views.CourseViewset.as_view({
+courseATview = views.RegistrationViewSet.as_view({
     'get': 'get_available_time',
 })
 
@@ -74,7 +74,7 @@ guestGetAvailable = views.GuestViewset.as_view({
     'get': "get_available_time"
 })
 # Enter URL path below
-urlpatterns = format_suffix_patterns([
+urlpatterns = [
     path('profile/', profileView, name='profile'),
     path('profile/add/<slug:teacher_uuid>', profileAddView, name='profile-add'),
 
@@ -97,4 +97,6 @@ urlpatterns = format_suffix_patterns([
     path('teacher/', teacherListView, name='lesson-day'),
     path('teacher/<slug:code>/favorite', teacherFavView, name='lesson-fav'),
 
-])
+    # Include URLs from student/v2/urls
+    path('v2/', include('student.v2.urls'), name='student_v2'),
+]

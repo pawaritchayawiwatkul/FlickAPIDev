@@ -2,13 +2,37 @@ from django.contrib import admin
 
 # Register your models here.
 from django.contrib import admin
-from .models import Teacher, UnavailableTimeOneTime, UnavailableTimeRegular
+from .models import Teacher, UnavailableTimeOneTime, UnavailableTimeRegular, Lesson
 
 @admin.register(Teacher)
 class TeacherAdmin(admin.ModelAdmin):
     list_display = ('user', 'school')
     search_fields = ('user__first_name', 'school__name')
     filter_horizontal = ('course',)
+
+@admin.register(Lesson)
+class LessonAdmin(admin.ModelAdmin):
+    list_display = (
+        'code',
+        'course',
+        'teacher',
+        'datetime',
+        'status',
+        'number_of_client',
+        'notified'
+    )
+    list_filter = ('status', 'course', 'teacher', 'notified', 'datetime')
+    search_fields = ('code', 'course__name', 'teacher__user__first_name', 'teacher__user__last_name')
+    ordering = ('-datetime',)
+    readonly_fields = ('code', 'number_of_client')
+    fieldsets = (
+        ('Lesson Details', {
+            'fields': ('code', 'course', 'teacher', 'status', 'datetime', 'number_of_client')
+        }),
+        ('Notification & Events', {
+            'fields': ('notified', 'student_event_id', 'teacher_event_id')
+        }),
+    )
 
 # @admin.register(UnavailableTimeOneTime)
 # class UnavailableTimeOneTimeAdmin(admin.ModelAdmin):

@@ -1,14 +1,13 @@
 from django.db import models
 from school.models import Course, School
 from core.models import User
-from teacher.models import Teacher
+from teacher.models import Teacher, Lesson
 from django.utils.timezone import make_aware, get_current_timezone
 from uuid import uuid4
 import random
 import string
 
 # Create your models here.
-_timezone = get_current_timezone()
 
 def file_generate_upload_path(instance, filename):
 	# Both filename and instance.file_name should have the same values
@@ -32,13 +31,13 @@ class CourseRegistration(models.Model):
     student_favorite = models.BooleanField(default=False)
     teacher_favorite = models.BooleanField(default=False)
 
-    teacher = models.ForeignKey(Teacher, on_delete=models.CASCADE, related_name="registration")
+    teacher = models.ForeignKey(Teacher, on_delete=models.PROTECT, related_name="registration", null=True, blank=True)
     course = models.ForeignKey(to=Course, on_delete=models.CASCADE, related_name="registration")
     student = models.ForeignKey(to="Student", on_delete=models.CASCADE, related_name="registration")
     
     paid_price = models.FloatField(null=True)
     discount = models.FloatField(null=True)
-    profile_image = models.FileField(
+    payment_slip = models.FileField(
         upload_to=file_generate_upload_path,
         blank=True,
         null=True
@@ -74,104 +73,7 @@ class Student(models.Model):
     def __str__(self) -> str:
         return self.user.__str__()
 
-class Lesson(models.Model):
-    STATUS_CHOICES = [
-        ('PENTE', 'PendingTeacher'),
-        ('PENST', 'PendingStudent'),
-        ('CON', 'Confirmed'),
-        ('COM', 'Completed'),
-        ('CAN', 'Canceled'),
-        ('MIS', 'Missed'),
-    ]
-
-    notes = models.CharField(max_length=300, blank=True)
-    booked_datetime = models.DateTimeField()
-    registration = models.ForeignKey(to=CourseRegistration, on_delete=models.CASCADE, related_name="lesson")
-    code = models.CharField(max_length=12, unique=True)
-    status = models.CharField(choices=STATUS_CHOICES, max_length=5, default="PENTE")
-    online = models.BooleanField(default=False)
-    notified = models.BooleanField(default=False)
-    student_event_id = models.CharField(null=True, blank=True)
-    teacher_event_id = models.CharField(null=True, blank=True)
-    
-    def generate_unique_code(self, length=8):
-        """Generate a unique random code."""
-        characters = string.ascii_letters + string.digits
-        code = ''.join(random.choice(characters) for _ in range(length))
-        return code
-    
-    def _generate_unique_code(self, length):
-        """Generate a unique code and ensure it's not already in the database."""
-        code = self.generate_unique_code(length)
-        while Lesson.objects.filter(code=code).exists():
-            code = self.generate_unique_code(length)
-        return code
-    
-    def save(self, *args, **kwargs):
-        if self.code is None or self.code == "":
-            self.code = self._generate_unique_code(12)
-        super(Lesson, self).save(*args, **kwargs)
-
-    def generate_title(self, is_teacher):
-        duration = self.registration.course.duration
-        subject_user = self.registration.student.user if is_teacher else self.registration.teacher.user
-        if self.online:
-            title = f"{subject_user.first_name} {subject_user.last_name} - {duration} min (Online)"
-        else:
-            title = f"{subject_user.first_name} {subject_user.last_name} - {duration} min"
-        return title
-
-    def generate_description(self, is_teacher):
-        """
-        Generates a detailed description string for the lesson.
-
-        Args:
-            is_teacher (bool): Determines the perspective of the description.
-                                True for teacher, False for student.
-
-        Returns:
-            str: A formatted description string.
-        """
-        # Determine the mode of the lesson
-        mode = "Online" if self.online else "In-Person"
-
-        # Format the booked datetime
-        datetime_formatted = self.booked_datetime.strftime("%Y-%m-%d %H:%M %Z")
-
-        # Handle optional fields gracefully
-        notes_display = self.notes if self.notes else "N/A"
-
-        # Determine the subject user based on the perspective
-        if is_teacher:
-            subject_user = self.registration.student.user
-        else:
-            subject_user = self.registration.teacher.user
-
-        # Retrieve the full name and email of the subject user
-        full_name = f"{subject_user.first_name} {subject_user.last_name}"
-        email_display = subject_user.email if subject_user.email else "N/A"
-
-        # Retrieve course information
-        course = self.registration.course
-        course_name = course.name if course else "N/A"
-        course_description = course.description if course else "N/A"
-
-        # Construct the description string
-        description = (
-            f"Lesson Details:\n\n"
-            f"Name: {full_name}\n"
-            f"Email: {email_display}\n"
-            f"Course: {course_name}\n"
-            f"Course Description: {course_description}\n"
-            f"Date & Time: {datetime_formatted}\n"
-            f"Duration: {self.registration.course.duration} minutes\n"
-            f"Mode: {mode}\n"
-            f"Notes: {notes_display}\n"
-        )
-
-        return description
-    
-class GuestLesson(models.Model):
+class Guest(models.Model):
     STATUS_CHOICES = [
         ('PEN', 'Pending'),
         ('CON', 'Confirmed'),
@@ -186,10 +88,6 @@ class GuestLesson(models.Model):
     datetime = models.DateTimeField()
     duration = models.IntegerField()
     code = models.CharField(max_length=12, unique=True)
-    status = models.CharField(choices=STATUS_CHOICES, max_length=3, default="PEN")
-    online = models.BooleanField(default=False)
-    teacher = models.ForeignKey(Teacher, on_delete=models.CASCADE, related_name="guestlesson")
-    teacher_event_id = models.CharField(null=True, blank=True)
     notified = models.BooleanField(default=False)
     
     def generate_unique_code(self, length=8):
@@ -199,34 +97,80 @@ class GuestLesson(models.Model):
     
     def _generate_unique_code(self, length):
         code = self.generate_unique_code(length)
-        while GuestLesson.objects.filter(code=code).exists():
+        while Guest.objects.filter(code=code).exists():
             code = self.generate_unique_code(length)
         return code
     
     def save(self, *args, **kwargs):
         if self.code is None or self.code == "":
             self.code = self._generate_unique_code(12)
-        super(GuestLesson, self).save(*args, **kwargs)
+        super(Guest, self).save(*args, **kwargs)
 
-    def generate_description(self):
-        """
-        Generates a detailed description string for the lesson.
-        """
-        mode = "Online" if self.online else "In-Person"
-        datetime_formatted = self.datetime.strftime("%Y-%m-%d %H:%M %Z")
+class Booking(models.Model):
+    USER_TYPE_CHOICES = [
+        ('student', 'Student'),
+        ('guest', 'Guest'),
+    ]
 
-        # Handle optional fields gracefully
-        email_display = self.email if self.email else "N/A"
-        notes_display = self.notes if self.notes else "N/A"
+    STATUS_CHOICES = [
+        ('COM', 'Completed'),
+        ('CAN', 'Canceled'),
+    ]
+    code = models.CharField(max_length=12, unique=True)
 
-        description = (
-            f"Lesson Details:\n\n"
-            f"Name: {self.name}\n"
-            f"Email: {email_display}\n"
-            f"Date & Time: {datetime_formatted}\n"
-            f"Duration: {self.duration} minutes\n"
-            f"Mode: {mode}\n"
-            f"Notes: {notes_display}\n"
-        )
+    lesson = models.ForeignKey(to=Lesson, on_delete=models.CASCADE, related_name="booking")
+    registration = models.ForeignKey(
+        to=CourseRegistration, 
+        on_delete=models.CASCADE, 
+        related_name="booking", 
+        null=True, 
+        blank=True  # Allow null for guest bookings
+    )
+    student = models.ForeignKey(
+        to=Student, 
+        on_delete=models.CASCADE, 
+        related_name="booking", 
+        null=True, 
+        blank=True  # Allow null for guest bookings
+    )
+    guest = models.ForeignKey(
+        to=Guest, 
+        on_delete=models.CASCADE, 
+        related_name="booking", 
+        null=True, 
+        blank=True  # Allow null for student bookings
+    )
+    user_type = models.CharField(
+        max_length=10, 
+        choices=USER_TYPE_CHOICES, 
+        default='student'
+    )
+    booked_datetime = models.DateTimeField(auto_now_add=True)
+    status = models.CharField(
+        max_length=10, 
+        choices=STATUS_CHOICES, 
+        default='COM'
+    )  # Restricted to only completed and canceled
 
-        return description
+    def __str__(self):
+        if self.user_type == 'student' and self.student:
+            return f"Student Booking: {self.student} - Status: {self.status}"
+        elif self.user_type == 'guest' and self.guest:
+            return f"Guest Booking: {self.guest} - Status: {self.status}"
+        return "Unknown Booking"
+
+    def generate_unique_code(self, length=8):
+        characters = string.ascii_letters + string.digits
+        code = ''.join(random.choice(characters) for _ in range(length))
+        return code
+    
+    def _generate_unique_code(self, length):
+        code = self.generate_unique_code(length)
+        while Booking.objects.filter(code=code).exists():
+            code = self.generate_unique_code(length)
+        return code
+    
+    def save(self, *args, **kwargs):
+        if self.code is None or self.code == "":
+            self.code = self._generate_unique_code(12)
+        super(Booking, self).save(*args, **kwargs)

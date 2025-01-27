@@ -3,14 +3,14 @@ from rest_framework.decorators import permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.viewsets import ViewSet
-from student.models import GuestLesson, CourseRegistration, Student, Lesson, StudentTeacherRelation
+from student.models import CourseRegistration, Student, Lesson, StudentTeacherRelation
 from teacher.models import UnavailableTimeOneTime, UnavailableTimeRegular, Teacher
 from django.utils import timezone
 from datetime import timedelta, datetime
 from django.db.models import  Prefetch
 from datetime import datetime
 from django.core.exceptions import ValidationError
-from student.serializers import GuestLessonSerializer, ListLessonSerializer, CourseRegistrationSerializer, LessonSerializer, ListTeacherSerializer, ListCourseRegistrationSerializer, ListLessonDateTimeSerializer, ProfileSerializer
+from student.serializers import ListLessonSerializer, CourseRegistrationSerializer, LessonSerializer, ListTeacherSerializer, ListCourseRegistrationSerializer, ListLessonDateTimeSerializer, ProfileSerializer
 from django.shortcuts import get_object_or_404
 from django.shortcuts import render
 from utils.util import compute_available_time, is_available, send_notification, create_calendar_event, delete_google_calendar_event, send_lesson_requested_email
@@ -75,7 +75,7 @@ class TeacherViewset(ViewSet):
             return Response({"error_messages": ["Invalid Request"]}, status=400)
     
 @permission_classes([IsAuthenticated])
-class CourseViewset(ViewSet):
+class RegistrationViewSet(ViewSet):
     def favorite(self, request, code):
         fav = request.GET.get("fav", None)
         if fav in ["0", "1"]:

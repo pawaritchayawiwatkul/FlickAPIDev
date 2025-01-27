@@ -161,7 +161,7 @@ class CourseRegistrationViewSet(ViewSet):
                     "course_name": course.name,
                     "course_uuid": course.uuid,
                     "amount": f"${registration.paid_price:.2f}" if registration.paid_price else 0.0,  # Assuming the `amount` field is on registration and formatted as needed
-                    "payment_slip": registration.payment_slip.url if registration.payment_slip else "",  # Assuming the payment slip is a file field,
+                    "profile_image": registration.profile_image.url if registration.profile_image else "",  # Assuming the payment slip is a file field,
                     "payment_status": registration.payment_status,
                 })
 
