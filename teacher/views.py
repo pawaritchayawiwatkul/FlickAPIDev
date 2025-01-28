@@ -82,7 +82,7 @@ class UnavailableTimeViewset(ViewSet):
                     date=date
                 ).only("start", "stop"),
                 to_attr="once"
-            ),
+            )
         ).get(user__id=request.user.id)
 
         unavailable_regular = UnavailableTimeSerializer(teacher.regular, many=True).data

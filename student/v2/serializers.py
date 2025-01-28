@@ -20,17 +20,18 @@ class ListCourseRegistrationSerializer(serializers.ModelSerializer):
     course_name = serializers.CharField(source="course.name")
     number_of_lessons = serializers.IntegerField(source="course.number_of_lessons")
     course_image_url = serializers.FileField(source="course.image")
+    instructor_name = serializers.CharField(source='teacher.user.get_full_name', read_only=True)
 
     class Meta:
         model = CourseRegistration
-        fields = ("uuid", "course_name", "lessons_left", "number_of_lessons", "exp_date", "course_image_url")
+        fields = ("uuid", "course_name", "lessons_left", "number_of_lessons", "exp_date", "course_image_url", "instructor_name")
 
 class CourseRegistrationDetailSerializer(serializers.ModelSerializer):
     course_name = serializers.CharField(source="course.name")
     course_price = serializers.FloatField(source="course.price")
     course_description = serializers.CharField(source="course.description")
     number_of_lessons = serializers.IntegerField(source="course.number_of_lessons")
-    instructor_name = serializers.CharField(source="teacher.user.first_name")
+    instructor_name = serializers.CharField(source='teacher.user.get_full_name', read_only=True)
     lesson_duration = serializers.IntegerField(source="course.duration")
     course_image_url = serializers.FileField(source="course.image")
     location = serializers.CharField(source="course.school.location", read_only=True)

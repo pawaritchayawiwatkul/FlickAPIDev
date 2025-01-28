@@ -21,12 +21,12 @@ urlpatterns = [
 
     # Registration routes
     path("registrations", RegistrationViewSet.as_view({"get": "list", "post": "create"}), name="registration-list"),
-    path("registrations/<slug:code>", RegistrationViewSet.as_view({"get": "retrieve"}), name="registration-retrieve"),
+    path("registrations/<uuid:code>", RegistrationViewSet.as_view({"get": "retrieve"}), name="registration-retrieve"),
 
     # Course routes
     path("courses/private", CourseViewSet.as_view({"get": "list_private"}), name="course-list"),
     path("courses/group", CourseViewSet.as_view({"get": "list_group"}), name="course-list"),
-    path("courses/<slug:uuid>", CourseViewSet.as_view({"get": "retrieve"}), name="course-list"),
+    path("courses/<uuid:uuid>", CourseViewSet.as_view({"get": "retrieve"}), name="course-list"),
 
     # Lesson routes
     path("lessons/list-private", LessonViewSet.as_view({"get": "list_private"}), name="lesson-list"),
@@ -34,5 +34,5 @@ urlpatterns = [
 
     # Booking routes
     path("bookings/", BookingViewSet.as_view({"get": "list"}), name="booking-list"),
-    path("bookings/<slug:code>", BookingViewSet.as_view({ "post": "create"}), name="booking-create"),
+    path("bookings/<str:code>", BookingViewSet.as_view({ "post": "create"}), name="booking-create"),
 ]

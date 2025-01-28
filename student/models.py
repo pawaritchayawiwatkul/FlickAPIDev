@@ -31,7 +31,7 @@ class CourseRegistration(models.Model):
     student_favorite = models.BooleanField(default=False)
     teacher_favorite = models.BooleanField(default=False)
 
-    teacher = models.ForeignKey(Teacher, on_delete=models.PROTECT, related_name="registration", null=True, blank=True)
+    teacher = models.ForeignKey(Teacher, on_delete=models.SET_NULL, related_name="registration", null=True, blank=True)
     course = models.ForeignKey(to=Course, on_delete=models.CASCADE, related_name="registration")
     student = models.ForeignKey(to="Student", on_delete=models.CASCADE, related_name="registration")
     
@@ -116,6 +116,7 @@ class Booking(models.Model):
         ('COM', 'Completed'),
         ('CAN', 'Canceled'),
     ]
+
     code = models.CharField(max_length=12, unique=True)
 
     lesson = models.ForeignKey(to=Lesson, on_delete=models.CASCADE, related_name="booking")

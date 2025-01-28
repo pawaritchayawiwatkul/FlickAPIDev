@@ -1,4 +1,4 @@
-from django.urls import path , re_path
+from django.urls import path , include
 from teacher import views
 from rest_framework.urlpatterns import format_suffix_patterns
 
@@ -176,4 +176,5 @@ urlpatterns = format_suffix_patterns([
     path('student/<slug:code>/favorite', studentFavView, name='student-fav'),
     path('student/<slug:code>/add', studentAddView, name='student-add'),
     
+    path('v2/', include('teacher.v2.urls'), name='student_v2'),
     ])
