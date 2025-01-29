@@ -1,21 +1,45 @@
 from rest_framework.permissions import BasePermission
-from student.models import Student
+
+class IsTeacher(BasePermission):
+    """
+    Custom permission to allow access only to teachers.
+    """
+
+    def has_permission(self, request, view):
+        return request.user.is_authenticated and request.user.is_teacher
+
+    def has_object_permission(self, request, view, obj):
+        return request.user.is_teacher
+
+
+class IsManager(BasePermission):
+    """
+    Custom permission to allow access only to managers.
+    """
+
+    def has_permission(self, request, view):
+        return request.user.is_authenticated and request.user.is_manager
+
+    def has_object_permission(self, request, view, obj):
+        return request.user.is_manager
+
 
 class IsStudent(BasePermission):
     """
     Custom permission to allow access only to students.
+    A student is defined as a user who is NOT a teacher and NOT a manager.
     """
 
     def has_permission(self, request, view):
-        # Check if the user is authenticated and has a related Student object
-        return request.user.is_authenticated and hasattr(request.user, "student")
+        return (
+            request.user.is_authenticated and 
+            not request.user.is_teacher and 
+            not request.user.is_manager
+        )
 
     def has_object_permission(self, request, view, obj):
-        # Optionally enforce object-level permissions (e.g., ownership)
-        # Ensure the student has access to the object
-        if hasattr(request.user, "student"):
-            if hasattr(obj, "student"):
-                return obj.student == request.user.student
-            # If the object is not directly linked to a student, grant access
-            return True
-        return False
+        return (
+            request.user.is_authenticated and 
+            not request.user.is_teacher and 
+            not request.user.is_manager
+        )

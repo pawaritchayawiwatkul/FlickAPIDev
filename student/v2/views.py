@@ -1,6 +1,6 @@
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.viewsets import ViewSet
-from rest_framework.decorators import action, api_view, permission_classes
+from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.exceptions import ValidationError
@@ -22,11 +22,17 @@ from student.v2.serializers import (
     CourseRegistrationSerializer,
     ListTeacherSerializer,
     ListCourseRegistrationSerializer,
-    ListLessonPrivateSerializer
+    ListLessonPrivateSerializer,
+    BookingDetailSerializer
 )
 from school.models import School
 from core.serializers import ProfileSerializer
 from internal.permissions import IsStudent
+from uuid import UUID
+from datetime import datetime
+import pytz
+
+gmt7 = pytz.timezone('Asia/Bangkok')
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated, IsStudent])
@@ -117,6 +123,7 @@ class RegistrationViewSet(ViewSet):
             return Response({"registration_id": obj.uuid}, status=201)
         return Response(ser.errors, status=400)
 
+
 class CourseViewSet(ViewSet):
     """
     ViewSet to list courses available for a student.
@@ -173,56 +180,52 @@ class LessonViewSet(ViewSet):
 
         # Collect valid course and teacher pairs
         course_teacher_pairs = registered_courses.values_list("course_id", "teacher_id")
-        print(course_teacher_pairs)
 
         # Create a list of Q objects for OR filtering
         conditions = [Q(course_id=course, teacher_id=teacher) for course, teacher in course_teacher_pairs]
-
+        
+        if not conditions:
+            return Response([], status=200)
+        
         # Combine all Q objects with OR using reduce
-        combined_conditions = reduce(or_, conditions) if conditions else Q()
+        combined_conditions = reduce(or_, conditions) 
 
         # Filter lessons that match the combined conditions
         lessons = Lesson.objects.filter(
             combined_conditions,
             course__is_group=False,
-            status="AVA"
+            status="AVA",
+            start_date__lte=datetime.now(gmt7)  # Ensure lessons are before or on today's date
+        ).select_related(
+            "course__school", "teacher__user"
         )
-        print(lessons)
 
         # Serialize and return the lessons
         ser = ListLessonPrivateSerializer(instance=lessons, many=True)
         return Response(ser.data, status=200)
-    
+
+
     def list_course(self, request):
         student = request.user.student
 
         # Fetch confirmed course registrations with their courses and teachers
         registered_courses = CourseRegistration.objects.filter(
             student=student, payment_status="confirm", course__is_group=True
-        )
+        ).values_list("course_id", flat=True)  # Extract only course IDs
 
-        # Collect valid course and teacher pairs
-        course_teacher_pairs = registered_courses.values_list("course_id")
-        print(course_teacher_pairs)
-
-        # Create a list of Q objects for OR filtering
-        conditions = [Q(course_id=course,) for course in course_teacher_pairs]
-
-        # Combine all Q objects with OR using reduce
-        combined_conditions = reduce(or_, conditions) if conditions else Q()
-
-        # Filter lessons that match the combined conditions
+        # Filter lessons that match the registered courses
         lessons = Lesson.objects.filter(
-            combined_conditions,
+            course_id__in=registered_courses,  # Use __in for filtering multiple course IDs
             course__is_group=True,
-            status="AVA"
+            status="AVA",
+            start_date__lte=datetime.now(gmt7)  # Ensure lessons are before or on today's date
+        ).select_related(
+            "course__school", "teacher__user"
         )
-        print(lessons)
 
         # Serialize and return the lessons
         ser = ListLessonCourseSerializer(instance=lessons, many=True)
         return Response(ser.data, status=200)
-    
 
 
 class BookingViewSet(ViewSet):
@@ -254,32 +257,64 @@ class BookingViewSet(ViewSet):
         # Apply filters
         filters = {"student": student}
         if translated_status:
+            filters["status"] = "COM"
             filters["lesson__status"] = translated_status
 
         # Query and serialize bookings
-        bookings = Booking.objects.filter(**filters).select_related("registration", "lesson__course", "lesson__teacher")
-        ser = ListBookingSerializer(instance=bookings, many=True)
+        bookings = Booking.objects.filter(**filters).select_related("lesson__course", "lesson__teacher")
+        ser = BookingDetailSerializer(instance=bookings, many=True)
+        # ser = ListBookingSerializer(instance=bookings, many=True)
+
         return Response(ser.data, status=200)
     
+    def retrieve(self, request, code):
+        student = request.user.student
+
+        # Get the booking object
+        booking = get_object_or_404(
+            Booking.objects.select_related("lesson__course__school", "lesson__teacher"),
+            code=code,
+            student=student
+        )
+
+        # Serialize and return the response
+        ser = BookingDetailSerializer(instance=booking)
+        return Response(ser.data, status=200)
+
     def create(self, request, code):
-        # Fetch the lesson using the provided code
-        lesson = get_object_or_404(Lesson.objects.select_related('course', 'teacher'), code=code)
+        student = request.user.student
+
+        # Fetch the lesson using the provided code and conditions
+        lesson = get_object_or_404(
+            Lesson.objects.select_related('course', 'teacher').filter(
+                Q(course__is_group=True, status="CON") | Q(course__is_group=False, status="AVA"),
+                code=code
+            )
+        )
 
         # Check if the lesson is a group course and validate group size
         if lesson.course.is_group and lesson.number_of_client >= lesson.course.group_size:
             return Response({"error": "This lesson has reached the maximum number of clients."}, status=400)
+        
 
-        # Extract registration UUID from the request data
-        registration_uuid = request.data.get("registration_uuid")
-        if not registration_uuid:
-            return Response({"error": "Registration UUID is required."}, status=400)
+        # Fetch course registration based on the provided UUIDs
+        filter_conditions = {
+            "course_id": lesson.course.id,
+            "student": student,
+            "payment_status": "confirm",
+        }
 
-        # Fetch the corresponding course registration for the user
-        registration = get_object_or_404(
-            CourseRegistration.objects.select_related('course', 'teacher'),
-            uuid=registration_uuid,
-            student__user=request.user
-        )
+        # If the course is not a group course, add the specific teacher condition
+        if not lesson.course.is_group:
+            filter_conditions["teacher_id"] = lesson.teacher.id
+
+        # Fetch the first matching course registration
+        registration = CourseRegistration.objects.filter(**filter_conditions).first()
+
+        # Check if a valid registration exists
+        if not registration:
+            return Response({"error": "No course registration found for the provided instructor and course."}, status=404)
+
 
         # Validate if the registration course matches the lesson course
         if registration.course_id != lesson.course_id:
@@ -303,10 +338,9 @@ class BookingViewSet(ViewSet):
         ser = CreateBookingSerializer(data=data)
         if ser.is_valid():
             ser.save(lesson=lesson)
-            if lesson.course.is_group:
-                lesson.number_of_client += 1  # Update client count only for group courses
-                lesson.status = "CON" if lesson.course.is_group else "PENTE"
-                lesson.save()
+            lesson.number_of_client += 1  # Update client count only for group courses
+            lesson.status = "CON" if lesson.course.is_group else "PENTE"
+            lesson.save()
             return Response({"message": "Booking created successfully."}, status=201)
 
         # Return validation errors if the serializer is invalid

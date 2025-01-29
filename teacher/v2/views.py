@@ -1,14 +1,12 @@
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
-from django.core.exceptions import ValidationError
 from django.db.utils import IntegrityError
 from django.db.models import Prefetch
 from rest_framework.permissions import IsAuthenticated
-from rest_framework.decorators import permission_classes
 from rest_framework.viewsets import ViewSet
 from rest_framework.response import Response
 from rest_framework import status
-from datetime import datetime, timedelta
+from datetime import timedelta
 import pytz
 from dateutil.parser import isoparse
 
@@ -24,12 +22,13 @@ from student.models import Student, StudentTeacherRelation, CourseRegistration, 
 from school.models import Course
 from core.serializers import CreateUserSerializer
 from utils.util import send_notification, create_calendar_event, delete_google_calendar_event
+from internal.permissions import IsTeacher
 
-_timezone = timezone.get_current_timezone()
 gmt7 = pytz.timezone('Asia/Bangkok')
 
-@permission_classes([IsAuthenticated])
 class CourseViewset(ViewSet):
+    permission_classes = [IsAuthenticated, IsTeacher]
+
     def list(self, request):
         teacher_courses = Course.objects.filter(
             school_id=request.user.teacher.school_id
@@ -68,8 +67,9 @@ class CourseViewset(ViewSet):
             return Response(serializer.data, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-@permission_classes([IsAuthenticated])
 class ProfileViewSet(ViewSet):
+    permission_classes = [IsAuthenticated, IsTeacher]
+
     def retrieve(self, request):
         serializer = ProfileSerializer(instance=request.user)
         return Response(serializer.data)
@@ -85,8 +85,10 @@ class ProfileViewSet(ViewSet):
         request.user.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
-@permission_classes([IsAuthenticated])
+
 class StudentViewSet(ViewSet):
+    permission_classes = [IsAuthenticated, IsTeacher]
+
     def list(self, request):
         students = StudentTeacherRelation.objects.filter(
             teacher__user_id=request.user.id
@@ -133,8 +135,10 @@ class StudentViewSet(ViewSet):
         serializer = ListCourseRegistrationSerializer(registrations, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
     
-@permission_classes([IsAuthenticated])
+
 class RegistrationViewset(ViewSet):
+    permission_classes = [IsAuthenticated, IsTeacher]
+
     def list(self, request):
         filters = {"teacher__user_id": request.user.id}
         if student_uuid := request.GET.get("student_uuid"):
@@ -160,8 +164,10 @@ class RegistrationViewset(ViewSet):
             return Response({"registration_id": registration.uuid}, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-@permission_classes([IsAuthenticated])
+
 class LessonViewset(ViewSet):
+    permission_classes = [IsAuthenticated, IsTeacher]
+
     def list(self, request):
         filters = {
             "teacher__user_id": request.user.id,

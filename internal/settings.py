@@ -311,3 +311,5 @@ CELERY_BEAT_SCHEDULE = {
         'args': (),
     },
 }
+
+DEBUG = True

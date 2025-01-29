@@ -11,9 +11,10 @@ from manager.serializers import CourseRegistrationSerializer, CourseSerializer
 from core.serializers import CreateUserSerializer, UserUpdateSerializer
 from rest_framework import status
 from django.db.utils import IntegrityError
+from internal.permissions import IsManager
 
 class InsightViewSet(ViewSet):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsManager]
 
     def retrieve(self, request):
         # Retrieve the Admin instance for the logged-in user
@@ -45,7 +46,7 @@ class InsightViewSet(ViewSet):
         return Response(analysis, status=200)
     
 class CalendarViewSet(ViewSet):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsManager]
 
     def month(self, request):
         # Get the month parameter
@@ -123,7 +124,7 @@ class CalendarViewSet(ViewSet):
         return Response(response_data, status=200)
 
 class CourseRegistrationViewSet(ViewSet):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsManager]
 
     def list(self, request):
         # Retrieve the Admin instance for the logged-in user
@@ -192,7 +193,7 @@ class CourseRegistrationViewSet(ViewSet):
         return Response({"message": "Payment status updated successfully."}, status=200)
     
 class StaffViewSet(ViewSet):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsManager]
 
     def list(self, request):
         # Retrieve the Admin instance for the logged-in user
@@ -347,7 +348,7 @@ class StaffViewSet(ViewSet):
             return Response({"error": "An error occurred while creating the client."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
 class ClientViewSet(ViewSet):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsManager]
 
     def list(self, request):
         # Retrieve the Admin instance for the logged-in user
@@ -483,7 +484,7 @@ class ClientViewSet(ViewSet):
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
         
 class RegistrationViewset(ViewSet):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsManager]
 
     def list(self, request, uuid):
         # Retrieve the Admin instance for the logged-in user
@@ -534,7 +535,7 @@ class RegistrationViewset(ViewSet):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class CourseViewset(ViewSet):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsManager]
 
     def list(self, request):
         # Retrieve the Admin instance for the logged-in user

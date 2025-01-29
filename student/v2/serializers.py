@@ -102,7 +102,7 @@ class ListCourseSerializer(serializers.ModelSerializer):
             "uuid", 
             "course_name", 
             "course_price", 
-            "course_image_url"
+            "course_image_url", 
         )
 
 class CourseDetailSerializer(serializers.ModelSerializer):
@@ -132,10 +132,14 @@ class CourseDetailSerializer(serializers.ModelSerializer):
 class ListLessonCourseSerializer(serializers.ModelSerializer):
     course_name = serializers.CharField(source='course.name', read_only=True)
     course_description = serializers.CharField(source='course.description', read_only=True)
+    course_uuid = serializers.UUIDField(source='course.uuid', read_only=True)
     instructor_name = serializers.CharField(source='teacher.user.get_full_name', read_only=True)
     instructor_phone_number = serializers.CharField(source='teacher.user.phone_number', read_only=True)
     instructor_email = serializers.CharField(source='teacher.user.email', read_only=True)
+    instructor_uuid = serializers.UUIDField(source='teacher.user.uuid', read_only=True)
     lesson_duration = serializers.IntegerField(source='course.duration', read_only=True)
+    location = serializers.CharField(source="course.school.location", read_only=True)
+    spots_left = serializers.SerializerMethodField()
 
     class Meta:
         model = Lesson
@@ -143,12 +147,23 @@ class ListLessonCourseSerializer(serializers.ModelSerializer):
             'code',
             'course_name',
             'course_description',
+            'course_uuid',
+            'number_of_client',
             'instructor_name',
             'instructor_phone_number',
             'instructor_email',
+            'instructor_uuid',
             'lesson_duration',
-            'datetime'
+            'datetime',
+            'location',
+            'spots_left'
         ]
+
+    def get_spots_left(self, obj:Lesson):
+        """Calculate remaining spots for group courses."""
+        if obj.course.is_group:
+            return max(obj.course.group_size - obj.number_of_client, 0)
+        return None
 
     def to_representation(self, instance):
         """Customize representation to handle null teacher."""
@@ -165,10 +180,14 @@ class ListLessonCourseSerializer(serializers.ModelSerializer):
 class ListLessonPrivateSerializer(serializers.ModelSerializer):
     course_name = serializers.CharField(source='course.name', read_only=True)
     course_description = serializers.CharField(source='course.description', read_only=True)
+    course_uuid = serializers.UUIDField(source='course.uuid', read_only=True)
     instructor_name = serializers.CharField(source='teacher.user.get_full_name', read_only=True)
     instructor_phone_number = serializers.CharField(source='teacher.user.phone_number', read_only=True)
     instructor_email = serializers.CharField(source='teacher.user.email', read_only=True)
+    instructor_uuid = serializers.UUIDField(source='teacher.user.uuid', read_only=True)
     lesson_duration = serializers.IntegerField(source='course.duration', read_only=True)
+    location = serializers.CharField(source="course.school.location", read_only=True)
+    spots_left = serializers.SerializerMethodField()
 
     class Meta:
         model = Lesson
@@ -176,11 +195,15 @@ class ListLessonPrivateSerializer(serializers.ModelSerializer):
             'code',
             'course_name',
             'course_description',
+            'course_uuid',
             'instructor_name',
             'instructor_phone_number',
             'instructor_email',
+            'instructor_uuid',
             'lesson_duration',
-            'datetime'
+            'datetime',
+            'location',
+            'spots_left'
         ]
 
     def to_representation(self, instance):
@@ -197,13 +220,36 @@ class ListLessonPrivateSerializer(serializers.ModelSerializer):
     
 class ListBookingSerializer(serializers.ModelSerializer):
     course_name = serializers.CharField(source='lesson.course.name', read_only=True)
+    instructor_name = serializers.CharField(source='lesson.teacher.user.get_full_name', read_only=True)
+    lesson_datetime = serializers.DateTimeField(source='lesson.datetime', read_only=True)
+    lesson_duration = serializers.IntegerField(source='lesson.course.duration', read_only=True)
+    lesson_status = serializers.CharField(source='lesson.status', read_only=True)
+    is_group = serializers.BooleanField(source='lesson.course.is_group', read_only=True)
+
+    class Meta:
+        model = Booking
+        fields = [
+            'code',
+            'course_name',
+            'instructor_name',
+            'lesson_datetime',
+            'lesson_duration',
+            'lesson_status',
+            'is_group'
+        ]
+
+class BookingDetailSerializer(serializers.ModelSerializer):
+    course_name = serializers.CharField(source='lesson.course.name', read_only=True)
     course_description = serializers.CharField(source='lesson.course.description', read_only=True)
+    instructor_image_url = serializers.FileField(source="lesson.teacher.user.profile_image")
     instructor_name = serializers.CharField(source='lesson.teacher.user.get_full_name', read_only=True)
     instructor_phone_number = serializers.CharField(source='lesson.teacher.user.phone_number', read_only=True)
     instructor_email = serializers.CharField(source='lesson.teacher.user.email', read_only=True)
     lesson_datetime = serializers.DateTimeField(source='lesson.datetime', read_only=True)
     lesson_duration = serializers.IntegerField(source='lesson.course.duration', read_only=True)
     lesson_status = serializers.CharField(source='lesson.status', read_only=True)
+    location = serializers.CharField(source="lesson.course.school.location", read_only=True)
+    is_group = serializers.BooleanField(source='lesson.course.is_group', read_only=True)
 
     class Meta:
         model = Booking
@@ -211,12 +257,15 @@ class ListBookingSerializer(serializers.ModelSerializer):
             'code',
             'course_name',
             'course_description',
+            'instructor_image_url',
             'instructor_name',
             'instructor_phone_number',
             'instructor_email',
             'lesson_datetime',
             'lesson_duration',
-            'lesson_status'
+            'lesson_status',
+            'location',
+            'is_group'
         ]
 
 class CreateBookingSerializer(serializers.ModelSerializer):
@@ -265,6 +314,6 @@ class CreateBookingSerializer(serializers.ModelSerializer):
             lesson=lesson,
             student_id=student,
             guest=guest,
-            registration=registration,
+            registration_id=registration,
             user_type=user_type,
         )

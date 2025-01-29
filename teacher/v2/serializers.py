@@ -262,7 +262,7 @@ class ListBookingSerializer(serializers.ModelSerializer):
     course_name = serializers.CharField(source="lesson.course.name")
     is_group = serializers.CharField(source="lesson.course.is_group")
     instructor_name = serializers.CharField(source='lesson.teacher.user.get_full_name', read_only=True)
-
+    datetime = serializers.DateTimeField(source="lesson.datetime")
 
     class Meta:
         model = Booking
