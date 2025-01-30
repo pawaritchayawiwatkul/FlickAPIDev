@@ -312,4 +312,4 @@ CELERY_BEAT_SCHEDULE = {
     },
 }
 
-DEBUG = True
+# DEBUG = True

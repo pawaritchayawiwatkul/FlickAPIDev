@@ -187,7 +187,6 @@ class ListLessonPrivateSerializer(serializers.ModelSerializer):
     instructor_uuid = serializers.UUIDField(source='teacher.user.uuid', read_only=True)
     lesson_duration = serializers.IntegerField(source='course.duration', read_only=True)
     location = serializers.CharField(source="course.school.location", read_only=True)
-    spots_left = serializers.SerializerMethodField()
 
     class Meta:
         model = Lesson
@@ -203,7 +202,6 @@ class ListLessonPrivateSerializer(serializers.ModelSerializer):
             'lesson_duration',
             'datetime',
             'location',
-            'spots_left'
         ]
 
     def to_representation(self, instance):

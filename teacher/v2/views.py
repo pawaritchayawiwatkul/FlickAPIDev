@@ -41,7 +41,7 @@ class CourseViewset(ViewSet):
         data["user_id"] = request.user.id
         serializer = CreateCourseSerializer(data=data)
         if serializer.is_valid():
-            course = serializer.save()
+            serializer.save()
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -171,7 +171,6 @@ class LessonViewset(ViewSet):
     def list(self, request):
         filters = {
             "teacher__user_id": request.user.id,
-            "datetime__gte": timezone.now().date(),
         }
 
         lesson_status = request.query_params.getlist("status")  # Allows multiple statuses
@@ -207,7 +206,6 @@ class LessonViewset(ViewSet):
     def retrieve(self, request, code):
         filters = {
             "teacher__user_id": request.user.id,
-            "datetime__gte": timezone.now().date(),
             "code": code,  # Filter by the specific lesson code
         }
 
@@ -242,16 +240,6 @@ class LessonViewset(ViewSet):
 
         lesson.status = "CAN"
         lesson.save()
-
-        gmt_time = lesson.datetime.astimezone(gmt7)
-        # send_notification(
-        #     lesson.registration.student.user_id,
-        #     "Lesson Canceled!",
-        #     f'{request.user.first_name} on {gmt_time.strftime("%Y-%m-%d")} at {gmt_time.strftime("%H:%M")}.'
-        # )
-
-        # if lesson.student_event_id:
-        #     delete_google_calendar_event(lesson.registration.student, lesson.student_event_id)
         if lesson.teacher_event_id:
             delete_google_calendar_event(request.user, lesson.teacher_event_id)
 
@@ -259,86 +247,10 @@ class LessonViewset(ViewSet):
 
     def confirm(self, request, code):
         lesson = get_object_or_404(
-            Lesson.objects.select_related("registration__course", "registration__student__user"),
-            code=code, registration__teacher__user_id=request.user.id, status="PENTE"
+            Lesson.objects.select_related("course"),
+            code=code, teacher__user_id=request.user.id, status="PENTE"
         )
 
         lesson.status = "CON"
-        finished = lesson.datetime + timedelta(minutes=lesson.registration.course.duration)
-        start_time_str = lesson.datetime.strftime("%Y-%m-%dT%H:%M:%S%z")
-        end_time_str = finished.strftime("%Y-%m-%dT%H:%M:%S%z")
-
-        student_event_id = create_calendar_event(
-            lesson.registration.student.user,
-            summary=lesson.generate_title(is_teacher=False),
-            description=lesson.generate_description(is_teacher=False),
-            start=start_time_str,
-            end=end_time_str
-        )
-        teacher_event_id = create_calendar_event(
-            request.user,
-            summary=lesson.generate_title(is_teacher=True),
-            description=lesson.generate_description(is_teacher=True),
-            start=start_time_str,
-            end=end_time_str
-        )
-
-        if student_event_id:
-            lesson.student_event_id = student_event_id
-        if teacher_event_id:
-            lesson.teacher_event_id = teacher_event_id
         lesson.save()
-
-        gmt_time = lesson.datetime.astimezone(gmt7)
-        send_notification(
-            lesson.registration.student.user_id,
-            "Lesson Confirmed!",
-            f'{request.user.first_name} on {gmt_time.strftime("%Y-%m-%d")} at {gmt_time.strftime("%H:%M")}.'
-        )
-
         return Response({"success": "Lesson confirmed successfully."}, status=status.HTTP_200_OK)
-
-    def attended(self, request, code):
-        lesson = get_object_or_404(
-            Lesson.objects.select_related("registration__course", "registration__student"),
-            code=code, registration__teacher__user_id=request.user.id, status="CON"
-        )
-
-        if lesson.datetime >= timezone.now():
-            return Response({"failed": "Lesson has not passed the booked datetime."}, status=status.HTTP_400_BAD_REQUEST)
-
-        lesson.status = "COM"
-        lesson.save()
-        # lesson.registration.lessons_left = max(0, lesson.registration.lessons_left - 1)
-        # lesson.registration.save()
-
-        gmt_time = lesson.datetime.astimezone(gmt7)
-        send_notification(
-            lesson.registration.student.user_id,
-            "Lesson Attended!",
-            f'{request.user.first_name} on {gmt_time.strftime("%Y-%m-%d")} at {gmt_time.strftime("%H:%M")}.'
-        )
-
-        return Response({"success": "Lesson attended successfully."}, status=status.HTTP_200_OK)
-
-    def missed(self, request, code):
-        lesson = get_object_or_404(
-            Lesson.objects.select_related("registration__course", "registration__student"),
-            code=code, registration__teacher__user_id=request.user.id, status="CON"
-        )
-
-        if lesson.datetime >= timezone.now():
-            return Response({"failed": "Lesson has not passed the booked datetime."}, status=status.HTTP_400_BAD_REQUEST)
-
-        lesson.status = "MIS"
-        lesson.save()
-
-        gmt_time = lesson.datetime.astimezone(gmt7)
-        send_notification(
-            lesson.registration.student.user_id,
-            "Lesson Missed!",
-            f'{request.user.first_name} on {gmt_time.strftime("%Y-%m-%d")} at {gmt_time.strftime("%H:%M")}.'
-        )
-
-        return Response({"success": "Lesson marked as missed."}, status=status.HTTP_200_OK)
-    

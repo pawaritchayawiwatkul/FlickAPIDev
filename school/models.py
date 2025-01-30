@@ -37,7 +37,7 @@ class Course(models.Model):
 
     image = models.FileField(upload_to="course_images/", null=True, blank=True)
 
-    is_group = models.BooleanField()
+    is_group = models.BooleanField(default=False)
     group_size = models.IntegerField(null=True)
     
     def __str__(self) -> str:

@@ -118,12 +118,8 @@ class Lesson(models.Model):
         super(Lesson, self).save(*args, **kwargs)
 
     def generate_title(self, is_teacher):
-        duration = self.registration.course.duration
-        subject_user = self.registration.student.user if is_teacher else self.registration.teacher.user
-        if self.online:
-            title = f"{subject_user.first_name} {subject_user.last_name} - {duration} min (Online)"
-        else:
-            title = f"{subject_user.first_name} {subject_user.last_name} - {duration} min"
+        duration = self.course.duration
+        title = f"{self.course.name} - {duration} min"
         return title
 
     def generate_description(self, is_teacher):

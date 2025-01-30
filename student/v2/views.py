@@ -195,7 +195,7 @@ class LessonViewSet(ViewSet):
             combined_conditions,
             course__is_group=False,
             status="AVA",
-            start_date__lte=datetime.now(gmt7)  # Ensure lessons are before or on today's date
+            datetime__lte=datetime.now(gmt7)  # Ensure lessons are before or on today's date
         ).select_related(
             "course__school", "teacher__user"
         )
@@ -218,7 +218,7 @@ class LessonViewSet(ViewSet):
             course_id__in=registered_courses,  # Use __in for filtering multiple course IDs
             course__is_group=True,
             status="AVA",
-            start_date__lte=datetime.now(gmt7)  # Ensure lessons are before or on today's date
+            datetime__lte=datetime.now(gmt7)  # Ensure lessons are before or on today's date
         ).select_related(
             "course__school", "teacher__user"
         )

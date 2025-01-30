@@ -78,19 +78,41 @@ class CourseDetailSerializer(serializers.ModelSerializer):
         instance.save()
         return instance
     
-class CreateCourseSerializer(serializers.Serializer):
+class CreateCourseSerializer(serializers.ModelSerializer):
     name = serializers.CharField(max_length=100)
-    description = serializers.CharField(max_length=300)
+    description = serializers.CharField(max_length=300, required=False)
     no_exp = serializers.BooleanField(default=True)
     exp_range = serializers.IntegerField(required=False)
     duration = serializers.IntegerField()
     number_of_lessons = serializers.IntegerField()
     user_id = serializers.IntegerField(write_only=True)
+    is_group = serializers.BooleanField(default=False)
+    image = serializers.FileField(required=True)
+    
+    class Meta:
+        model = Course
+        fields = (
+            'name', 
+            'description', 
+            'no_exp', 
+            'exp_range', 
+            'duration', 
+            'number_of_lessons', 
+            'user_id', 
+            'is_group',
+            'image'
+        )
 
     def create(self, validated_data):
-        teacher = validated_data.pop("teacher")
+        user_id = validated_data.pop('user_id')
+        try:
+            teacher = Teacher.objects.select_related("school").get(user__id=user_id)
+            validated_data['school_id'] = teacher.school.id
+        except Teacher.DoesNotExist:
+            raise serializers.ValidationError({
+                'user_id': 'User not found'
+            })
         course = Course.objects.create(**validated_data)
-        teacher.course.add(course)
         return course
 
     def validate(self, attrs):
@@ -100,18 +122,7 @@ class CreateCourseSerializer(serializers.Serializer):
             raise serializers.ValidationError({
                 'exp_range': 'This field is required when no_exp is False.'
             })
-        
-        user_id = attrs.pop("user_id")
-        try: 
-            teacher = Teacher.objects.select_related("school").get(user__id=user_id)
-            attrs['teacher'] = teacher
-            attrs['school_id'] = teacher.school.id
-        except Teacher.DoesNotExist:
-            raise serializers.ValidationError({
-                'user_id': 'User not found'
-            })
         return attrs
-    
 
 class ListStudentSerializer(serializers.ModelSerializer):
     name = serializers.SerializerMethodField()
@@ -218,7 +229,7 @@ class CreateCourseRegistrationSerializer(serializers.Serializer):
 class ListLessonSerializer(serializers.ModelSerializer):
     duration = serializers.IntegerField(source="course.duration")
     course_name = serializers.CharField(source="course.name")
-    is_group = serializers.CharField(source="course.is_group")
+    is_group = serializers.BooleanField(source="course.is_group")
     student_name = serializers.SerializerMethodField()
 
     class Meta:
