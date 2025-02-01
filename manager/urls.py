@@ -54,6 +54,7 @@ courseViewSet = views.CourseViewset.as_view({
     'post': 'create'
 })
 
+
 # Enter URL path below
 urlpatterns = format_suffix_patterns([
     path('insight', insightViewSet, name='insight'),

@@ -2,7 +2,7 @@ from rest_framework import serializers
 from student.models import CourseRegistration
 from rest_framework import serializers
 from student.models import  CourseRegistration, Student
-from teacher.models import Teacher, Lesson, AvailableTime
+from teacher.models import Teacher, Lesson
 from school.models import Course, School
 from dateutil.relativedelta import relativedelta
 from datetime import date, timedelta
@@ -182,10 +182,11 @@ class PurchaseSerializer(serializers.ModelSerializer):
 
 class TeacherSerializer(serializers.ModelSerializer):
     profile_picture = serializers.SerializerMethodField()
+    available_times = serializers.JSONField()  # Add available_times field
 
     class Meta:
         model = Teacher
-        fields = ['profile_picture', 'first_name', 'last_name', 'uuid', 'phone_number', 'email']
+        fields = ['profile_picture', 'first_name', 'last_name', 'uuid', 'phone_number', 'email', 'available_times']
 
     def get_profile_picture(self, obj):
         return obj.user.profile_image.url if obj.user.profile_image else ""
@@ -208,7 +209,3 @@ class RegistrationSerializer(serializers.ModelSerializer):
         fields = ['registration_uuid', 'course_name', 'registration_date', 'paid_price']
 
 
-class AvailableTimeSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = AvailableTime
-        fields = ['uuid', 'day', 'start', 'stop', 'teacher']

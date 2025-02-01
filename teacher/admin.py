@@ -1,5 +1,5 @@
 from django.contrib import admin
-from teacher.models import Teacher, UnavailableTimeOneTime, UnavailableTimeRegular, AvailableTime, Lesson
+from teacher.models import Teacher, UnavailableTimeOneTime, UnavailableTimeRegular, Lesson
 
 @admin.register(Teacher)
 class TeacherAdmin(admin.ModelAdmin):
@@ -38,12 +38,6 @@ class UnavailableTimeOneTimeAdmin(admin.ModelAdmin):
 
 @admin.register(UnavailableTimeRegular)
 class UnavailableTimeRegularAdmin(admin.ModelAdmin):
-    list_display = ('day', 'start', 'stop', 'teacher')
-    search_fields = ('teacher__user__first_name', 'teacher__user__last_name')
-    list_filter = ('day',)
-
-@admin.register(AvailableTime)
-class AvailableTimeAdmin(admin.ModelAdmin):
     list_display = ('day', 'start', 'stop', 'teacher')
     search_fields = ('teacher__user__first_name', 'teacher__user__last_name')
     list_filter = ('day',)

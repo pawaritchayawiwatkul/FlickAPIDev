@@ -5,16 +5,18 @@ from django.db.models import Prefetch, Sum, Count
 from datetime import datetime, timedelta
 from student.models import Lesson, CourseRegistration, StudentTeacherRelation, Student, Booking
 from school.models import School, Course  # Ensure Admin model is imported
-from teacher.models import Teacher, AvailableTime
+from teacher.models import Teacher
 from manager.models import Admin
 from manager.serializers import ( 
-    CourseRegistrationSerializer, CourseSerializer, PurchaseSerializer, AvailableTimeSerializer
+    CourseRegistrationSerializer, CourseSerializer, PurchaseSerializer
 )
 from core.serializers import CreateUserSerializer, UserUpdateSerializer
 from rest_framework import status
 from django.db.utils import IntegrityError
 from internal.permissions import IsManager
 from rest_framework.viewsets import ModelViewSet
+from uuid import UUID
+from django.core.exceptions import ValidationError
 
 class InsightViewSet(ViewSet):
     permission_classes = [IsAuthenticated, IsManager]
@@ -225,8 +227,6 @@ class StaffViewSet(ViewSet):
         if not school:
             return Response({"error": "School not found."}, status=404)
 
-        for teacher in school.teacher.all():
-            print(teacher.user.profile_image)
         # Format the response data for employees
         employees = [
             {
@@ -266,6 +266,7 @@ class StaffViewSet(ViewSet):
             "last_name": user.last_name,  # Full name
             "email": user.email,
             "phone_number": user.phone_number,
+            "available_times": teacher.available_times  # Include available times
         }
 
         return Response({"teacher": teacher_details})
@@ -315,7 +316,14 @@ class StaffViewSet(ViewSet):
         serializer = UserUpdateSerializer(teacher.user, data=request.data, partial=True)  # partial=True allows partial updates
         
         if serializer.is_valid():
-            serializer.save()  # Save the updated data
+            serializer.save()
+            # Update available_times if provided
+            if 'available_time' in request.data:
+                teacher.available_times = request.data['available_time']
+                try:
+                    teacher.save()
+                except ValidationError as e:
+                    return Response({"available_times": e.messages}, status=status.HTTP_400_BAD_REQUEST)
             return Response({"message": "User info updated successfully."}, status=status.HTTP_200_OK)
         
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)    
@@ -338,19 +346,16 @@ class StaffViewSet(ViewSet):
             # Create the Teacher instance and associate with the School
             teacher = Teacher.objects.create(user=user, school=admin.school)
 
-            # Create AvailableTime instances for the teacher using bulk create
+            # Set available times for the teacher
             available_times = request.data.get('available_time', [])
-            available_time_objects = [
-                AvailableTime(
-                    teacher=teacher,
-                    day=time['date'],
-                    start=time['start'],
-                    stop=time['stop']
-                )
-                for time in available_times
-            ]
-            AvailableTime.objects.bulk_create(available_time_objects)
+            teacher.available_times = available_times
 
+            # Validate available_times
+            try:
+                teacher.save()
+            except ValidationError as e:
+                return Response({"available_time": e.messages}, status=status.HTTP_400_BAD_REQUEST)
+            
             return Response(user_serializer.data, status=status.HTTP_201_CREATED)
         except IntegrityError as e:
             # Check the exception message for details
@@ -584,82 +589,3 @@ class CourseViewset(ViewSet):
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-class AvailableTimeViewSet(ViewSet):
-    permission_classes = [IsAuthenticated, IsManager]
-    serializer_class = AvailableTimeSerializer
-
-    def list(self, request):
-        # Retrieve the Admin instance for the logged-in user
-        admin = Admin.objects.filter(user_id=request.user.id).first()
-        if not admin:
-            return Response({"error": "Admin not found for the current user."}, status=404)
-
-        # Return available times for the teachers in the admin's school
-        available_times = AvailableTime.objects.filter(teacher__school=admin.school)
-        serializer = AvailableTimeSerializer(available_times, many=True)
-        return Response(serializer.data)
-
-    def create(self, request):
-        # Retrieve the Admin instance for the logged-in user
-        admin = Admin.objects.filter(user_id=request.user.id).first()
-        if not admin:
-            return Response({"error": "Admin not found for the current user."}, status=404)
-
-        # Ensure the teacher belongs to the admin's school
-        serializer = AvailableTimeSerializer(data=request.data)
-        if serializer.is_valid():
-            teacher = serializer.validated_data['teacher']
-            if teacher.school != admin.school:
-                return Response({"error": "Teacher does not belong to the admin's school."}, status=400)
-            serializer.save()
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-    def retrieve(self, request, code=None):
-        # Retrieve the Admin instance for the logged-in user
-        admin = Admin.objects.filter(user_id=request.user.id).first()
-        if not admin:
-            return Response({"error": "Admin not found for the current user."}, status=404)
-
-        # Retrieve the available time instance
-        try:
-            available_time = AvailableTime.objects.get(code=code, teacher__school=admin.school)
-        except AvailableTime.DoesNotExist:
-            return Response({"error": "Available time not found."}, status=404)
-
-        serializer = AvailableTimeSerializer(available_time)
-        return Response(serializer.data)
-
-    def update(self, request, code=None):
-        # Retrieve the Admin instance for the logged-in user
-        admin = Admin.objects.filter(user_id=request.user.id).first()
-        if not admin:
-            return Response({"error": "Admin not found for the current user."}, status=404)
-
-        # Retrieve the available time instance
-        try:
-            available_time = AvailableTime.objects.get(code=code, teacher__school=admin.school)
-        except AvailableTime.DoesNotExist:
-            return Response({"error": "Available time not found."}, status=404)
-
-        serializer = AvailableTimeSerializer(available_time, data=request.data, partial=True)
-        if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-    def destroy(self, request, code=None):
-        # Retrieve the Admin instance for the logged-in user
-        admin = Admin.objects.filter(user_id=request.user.id).first()
-        if not admin:
-            return Response({"error": "Admin not found for the current user."}, status=404)
-
-        # Retrieve the available time instance
-        try:
-            available_time = AvailableTime.objects.get(code=code, teacher__school=admin.school)
-        except AvailableTime.DoesNotExist:
-            return Response({"error": "Available time not found."}, status=404)
-
-        available_time.delete()
-        return Response(status=status.HTTP_204_NO_CONTENT)

@@ -18,3 +18,15 @@ for school in School.objects.all():
         print(f"⚡ Settings already exist for {school.name}")
 
 print("✅ SchoolSettings generation complete!")
+
+
+
+// Upload Code
+cd dev_api 
+source env/bin/activate
+git clone https://github.com/pawaritchayawiwatkul/FlickAPIDev.git versionXX
+cp .env version14
+cp -r keys version14
+cd version14
+rm -rf utils.py 
+lsof -i :8000
