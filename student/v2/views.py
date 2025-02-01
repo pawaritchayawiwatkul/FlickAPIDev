@@ -2,10 +2,9 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.viewsets import ViewSet
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
-from rest_framework import status
 from rest_framework.exceptions import ValidationError
 from django.shortcuts import get_object_or_404
-from django.db.models import Q
+from django.db.models import Q, F
 from functools import reduce
 from operator import or_
 
@@ -14,7 +13,6 @@ from teacher.models import Teacher, Lesson
 from school.models import Course
 from student.v2.serializers import (
     CreateBookingSerializer,
-    ListBookingSerializer,
     ListLessonCourseSerializer,
     CourseRegistrationDetailSerializer,
     ListCourseSerializer,
@@ -33,6 +31,7 @@ from datetime import datetime
 import pytz
 
 gmt7 = pytz.timezone('Asia/Bangkok')
+
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated, IsStudent])
@@ -163,6 +162,10 @@ class CourseViewSet(ViewSet):
         ser = CourseDetailSerializer(instance=course)
         return Response(ser.data, status=200)
 
+
+from django.utils import timezone
+from datetime import timedelta
+
 class LessonViewSet(ViewSet):
     """
     ViewSet to manage lessons and their bookings.
@@ -172,6 +175,20 @@ class LessonViewSet(ViewSet):
 
     def list_private(self, request):
         student = request.user.student
+
+        # Fetch the month and year from query parameters
+        month = request.query_params.get("month")
+        year = request.query_params.get("year")
+        filters = {}
+        if month and year:
+            try:
+                month = int(month)
+                year = int(year)
+                start_date = timezone.datetime(year, month, 1, tzinfo=timezone.utc)
+                end_date = (start_date + timedelta(days=32)).replace(day=1)
+                filters["datetime__range"] = (start_date, end_date)
+            except ValueError:
+                return Response({"error": "Invalid month or year"}, status=400)
 
         # Fetch confirmed course registrations with their courses and teachers
         registered_courses = CourseRegistration.objects.filter(
@@ -183,19 +200,19 @@ class LessonViewSet(ViewSet):
 
         # Create a list of Q objects for OR filtering
         conditions = [Q(course_id=course, teacher_id=teacher) for course, teacher in course_teacher_pairs]
-        
         if not conditions:
             return Response([], status=200)
-        
-        # Combine all Q objects with OR using reduce
-        combined_conditions = reduce(or_, conditions) 
 
-        # Filter lessons that match the combined conditions
+        # Combine all Q objects with OR using reduce
+        combined_conditions = reduce(or_, conditions)
+
+        # Filter lessons that match the combined conditions and the specified date range
         lessons = Lesson.objects.filter(
             combined_conditions,
             course__is_group=False,
             status="AVA",
-            datetime__lte=datetime.now(gmt7)  # Ensure lessons are before or on today's date
+            **filters,
+            datetime__gte=datetime.now()  # Ensure lessons are before or on today's date
         ).select_related(
             "course__school", "teacher__user"
         )
@@ -208,18 +225,37 @@ class LessonViewSet(ViewSet):
     def list_course(self, request):
         student = request.user.student
 
+        # Fetch the month and year from query parameters
+        month = request.query_params.get("month")
+        year = request.query_params.get("year")
+        filters = {}
+        if month and year:
+            try:
+                month = int(month)
+                year = int(year)
+                start_date = timezone.datetime(year, month, 1, tzinfo=timezone.utc)
+                end_date = (start_date + timedelta(days=32)).replace(day=1)
+                filters["datetime__range"] = (start_date, end_date)
+            except ValueError:
+                return Response({"error": "Invalid month or year"}, status=400)
+
         # Fetch confirmed course registrations with their courses and teachers
         registered_courses = CourseRegistration.objects.filter(
             student=student, payment_status="confirm", course__is_group=True
         ).values_list("course_id", flat=True)  # Extract only course IDs
 
-        # Filter lessons that match the registered courses
+        # Fetch already booked lesson IDs for the student
+        booked_lessons = Booking.objects.filter(student=student).values_list('lesson_id', flat=True)
+
+        # Filter lessons that match the registered courses, have number_of_client less than group_size, are not booked, and match the specified date range
         lessons = Lesson.objects.filter(
             course_id__in=registered_courses,  # Use __in for filtering multiple course IDs
             course__is_group=True,
-            status="AVA",
-            datetime__lte=datetime.now(gmt7)  # Ensure lessons are before or on today's date
-        ).select_related(
+            status="CON",
+            number_of_client__lt=F('course__group_size'),  # Ensure number_of_client is less than group_size
+            **filters,
+            datetime__gte=datetime.now(),  # Ensure lessons are after or on today's date
+        ).exclude(id__in=booked_lessons).select_related(
             "course__school", "teacher__user"
         )
 
@@ -246,7 +282,7 @@ class BookingViewSet(ViewSet):
         student = request.user.student
 
         # Validate the lesson status query parameter
-        if lesson_status and lesson_status not in self.VALID_STATUSES:
+        if (lesson_status and lesson_status not in self.VALID_STATUSES):
             raise ValidationError(
                 {"status": f"Invalid status value. Valid choices are: {', '.join(self.VALID_STATUSES.keys())}"}
             )

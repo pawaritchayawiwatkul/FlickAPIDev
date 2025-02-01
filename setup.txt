@@ -1,0 +1,20 @@
+// Generate School Settings
+from school.models import School, SchoolSettings
+
+# Default values for scheduling settings
+DEFAULT_DAYS_AHEAD = 21
+DEFAULT_INTERVAL = 30
+
+# Iterate through all schools and create SchoolSettings if missing
+for school in School.objects.all():
+    if not hasattr(school, 'settings'):  # Check if settings exist
+        SchoolSettings.objects.create(
+            school=school,
+            days_ahead=DEFAULT_DAYS_AHEAD,
+            interval=DEFAULT_INTERVAL
+        )
+        print(f"✅ Created settings for {school.name}")
+    else:
+        print(f"⚡ Settings already exist for {school.name}")
+
+print("✅ SchoolSettings generation complete!")

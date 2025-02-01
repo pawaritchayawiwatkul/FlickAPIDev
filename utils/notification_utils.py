@@ -1,18 +1,13 @@
 import random
 import string
 from django.utils import timezone
-from datetime import datetime, timedelta
-from student.models import Lesson
-from teacher.models import UnavailableTimeOneTime
-from typing import List
-from rest_framework.response import Response
+from datetime import datetime
 from cryptography.fernet import Fernet
 from django.conf import settings
 from fcm_django.models import FCMDevice
 from firebase_admin.messaging import Message, Notification
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
-from django.utils.timezone import localtime
 import pytz
 from django.core.mail import EmailMessage
 from django.template.loader import render_to_string
@@ -24,6 +19,20 @@ fernet = Fernet(settings.FERNET_KEY)
 _timezone =  timezone.get_current_timezone().__str__()
 base_datetime = datetime(1999,1, 1)
 
+def encrypt_token(token: str) -> str:
+    encrypted_token = fernet.encrypt(token.encode())
+    return encrypted_token.decode()
+
+def decrypt_token(encrypted_token: str) -> str:
+    decrypted_token = fernet.decrypt(encrypted_token.encode())
+    return decrypted_token.decode()
+
+def generate_unique_code(length=8):
+    """Generate a unique random code."""
+    characters = string.ascii_letters + string.digits
+    code = ''.join(random.choice(characters) for _ in range(length))
+    return code
+    
 def delete_google_calendar_event(user, event_id):
     credentials_data = user.google_credentials
     if not credentials_data:
@@ -121,112 +130,7 @@ def send_notification(user_id, title, body):
                 ),
             ),
         )
-    
-def encrypt_token(token: str) -> str:
-    encrypted_token = fernet.encrypt(token.encode())
-    return encrypted_token.decode()
 
-def decrypt_token(encrypted_token: str) -> str:
-    decrypted_token = fernet.decrypt(encrypted_token.encode())
-    return decrypted_token.decode()
-
-def generate_unique_code(length=8):
-    """Generate a unique random code."""
-    characters = string.ascii_letters + string.digits
-    code = ''.join(random.choice(characters) for _ in range(length))
-    return code
-
-def merge_schedule(validated_data, unavailables):
-    new_start = validated_data['start']
-    new_stop = validated_data['stop']
-    overlap = []
-    for interval in unavailables:
-        start = interval.start
-        stop = interval.stop
-        _ = False
-        if start > new_stop:
-            # print('1')
-            continue
-        elif stop < new_start:
-            # print('2')
-            continue
-        if start <= new_start:
-            # print('3')
-            new_start = start
-            _ = True
-        if stop >= new_stop:
-            # print('4')
-            new_stop = stop
-            _ = True
-        overlap.append(interval)
-
-    validated_data['start'] = new_start
-    validated_data['stop'] = new_stop
-    return validated_data, overlap
-
-def compute_available_time(unavailables:List[UnavailableTimeOneTime], lessons:List[Lesson], date_time, start, stop, duration):
-    duration = timedelta(minutes=duration)
-    interval = timedelta(minutes=30)
-    available_times = []
-
-    current_time = timezone.make_aware(datetime.combine(date_time, start), timezone=gmt7)
-    stop_time = timezone.make_aware(datetime.combine(date_time, stop), timezone=gmt7)
-
-    while current_time + duration <= stop_time:
-        end_time = current_time + duration
-        
-        _is_available = True
-        for unavailable in unavailables:
-            start_ = timezone.make_aware(datetime.combine(date_time, unavailable.start), timezone=gmt7)
-            stop_ = timezone.make_aware(datetime.combine(date_time, unavailable.stop), timezone=gmt7)
-            if (start_ <= current_time < stop_) or (start_ < end_time <= stop_):
-                _is_available = False
-                break
-        for lesson in lessons:
-            start_ = lesson.booked_datetime
-            stop_ = start_ + timedelta(minutes=lesson.registration.course.duration)
-            print(start_.tzinfo, start_, stop_)
-            print(current_time)
-            if (start_ <= current_time < stop_) or (start_ < end_time <= stop_):
-                _is_available = False
-                break
-        for lesson in guest_lessons:
-            start_ = lesson.datetime
-            stop_ = start_ + timedelta(minutes=lesson.duration)
-            if (start_ <= current_time < stop_) or (start_ < end_time <= stop_):
-                _is_available = False
-                break
-        if _is_available:
-            available_times.append({
-                "start": current_time.strftime("%H:%M:%S"),
-                "end": end_time.strftime("%H:%M:%S")
-            })
-        current_time += interval
-    return available_times
-
-def is_available(unavailables:List[UnavailableTimeOneTime], lessons:List[Lesson], date_time, start, stop, duration):
-    start_time = date_time
-    end_time = start_time + timedelta(minutes=duration)
-    school_start = timezone.make_aware(datetime.combine(date_time, start), timezone=gmt7)
-    school_close = timezone.make_aware(datetime.combine(date_time, stop), timezone=gmt7)
-    if not (school_start <= start_time < school_close) or not (school_start <= end_time <= school_close):
-        return False
-    for unavailable in unavailables:
-        start_ = timezone.make_aware(datetime.combine(start_time, unavailable.start), timezone=gmt7)
-        stop_ = timezone.make_aware(datetime.combine(start_time, unavailable.stop), timezone=gmt7)
-        if (start_ <= start_time < stop_) or (start_ < end_time <= stop_):
-            return False
-    for lesson in lessons:
-        start_ = lesson.booked_datetime
-        stop_ = start_ + timedelta(minutes=duration)
-        if (start_ <= start_time < stop_) or (start_ < end_time <= stop_):
-            return False
-    for lesson in guest_lessons:
-        start_ = lesson.datetime
-        stop_ = start_ + timedelta(minutes=duration)
-        if (start_ <= start_time < stop_) or (start_ < end_time <= stop_):
-            return False
-    return True
 
 def send_cancellation_email_html(student_name, tutor_name, lesson_date, lesson_time, duration, mode, student_email):
     # Prepare the email subject

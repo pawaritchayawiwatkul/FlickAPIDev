@@ -300,14 +300,19 @@ from celery.schedules import schedule
 
 
 CELERY_BEAT_SCHEDULE = {
-    'send-lesson-notification-every-15-minutes': {
-        'task': 'teacher.tasks.send_lesson_notification',
-        'schedule': crontab(minute='*/15'),  # Executes every 15 minutes
-        'args': (),
-    },
-    'send-guest-notification-every-15-minutes': {
-        'task': 'teacher.tasks.send_guest_lesson_notification',
-        'schedule': crontab(minute='*/15'),  # Executes every 15 minutes
+    # 'send-lesson-notification-every-15-minutes': {
+    #     'task': 'teacher.tasks.send_lesson_notification',
+    #     'schedule': crontab(minute='*/15'),  # Executes every 15 minutes
+    #     'args': (),
+    # },
+    # 'send-guest-notification-every-15-minutes': {
+    #     'task': 'teacher.tasks.send_guest_lesson_notification',
+    #     'schedule': crontab(minute='*/15'),  # Executes every 15 minutes
+    #     'args': (),
+    # },
+    'generate-upcoming-lessons-every-day': {
+        'task': 'manager.tasks.generate_upcoming_lessons',
+        'schedule': crontab(hour=0, minute=1),  # Executes every day at 00:01
         'args': (),
     },
 }

@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from teacher.models import Course, Teacher, TeacherCourses, UnavailableTimeOneTime, UnavailableTimeRegular
+from teacher.models import Course, Teacher, UnavailableTimeOneTime, UnavailableTimeRegular
 from student.models import StudentTeacherRelation, CourseRegistration, Lesson, Student
 from school.models import School
 from core.models import User
@@ -73,43 +73,6 @@ class OnetimeUnavailableSerializer(serializers.ModelSerializer):
                 'start_n_stop': 'start must be before stop'
             })
         return attrs
-
-class TeacherCourseListSerializer(serializers.ModelSerializer):
-    name = serializers.CharField(source="course.name")
-    description = serializers.CharField(source="course.description")
-    uuid = serializers.CharField(source="course.uuid")
-
-
-    class Meta:
-        model = TeacherCourses
-        fields = ("name", "description", "favorite", "uuid")
-
-class TeacherCourseDetailwithStudentSerializer(serializers.ModelSerializer):
-    no_exp = serializers.BooleanField(source="course.no_exp")
-    exp_range = serializers.IntegerField(source="course.exp_range")
-    duration = serializers.IntegerField(source="course.duration")
-    description = serializers.CharField(source="course.description")
-    number_of_lessons = serializers.IntegerField(source="course.number_of_lessons")
-    students = serializers.SerializerMethodField()
-
-    def get_students(self, obj):
-        students = obj.course._prefetched_objects_cache['registration'].values_list('student').distinct()
-        return ListStudentSerializer(StudentTeacherRelation.objects.select_related("student__user").filter(student_id__in=students, teacher_id=obj.teacher_id), many=True).data
-    
-    class Meta:
-        model = TeacherCourses
-        fields = ("favorite", "no_exp", "exp_range", "duration", "number_of_lessons", "description", "students")
-
-class TeacherCourseDetailSerializer(serializers.ModelSerializer):
-    no_exp = serializers.BooleanField(source="course.no_exp")
-    exp_range = serializers.IntegerField(source="course.exp_range")
-    duration = serializers.IntegerField(source="course.duration")
-    description = serializers.CharField(source="course.description")
-    number_of_lessons = serializers.IntegerField(source="course.number_of_lessons")
-
-    class Meta:
-        model = TeacherCourses
-        fields = ("favorite", "no_exp", "exp_range", "duration", "number_of_lessons", "description")
 
 
 class UnavailableTimeSerializer(serializers.Serializer):

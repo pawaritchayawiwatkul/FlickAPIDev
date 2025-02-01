@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from teacher.models import Course, Teacher
+from teacher.models import Course, Teacher, UnavailableTimeOneTime, UnavailableTimeRegular
 from student.models import StudentTeacherRelation, CourseRegistration, Lesson, Student, Booking
 from core.models import User
 import datetime
@@ -175,17 +175,13 @@ class CreateCourseRegistrationSerializer(serializers.Serializer):
     course_id = serializers.CharField()
     teacher_id = serializers.IntegerField()
     student_id = serializers.CharField()
+    number_of_lessons = serializers.IntegerField(required=False)
 
     def create(self, validated_data):
         regis = CourseRegistration.objects.create(**validated_data)
         student = validated_data['student']
-        teacher = validated_data['teacher']
         course = validated_data['course']
-        if not student.teacher.filter(id=teacher.id).exists():
-            student.teacher.add(teacher)
-            student.school.add(teacher.school_id)
-
-        exp_date = ""
+        
         devices = FCMDevice.objects.filter(user=student.user_id)
         devices.send_message(
                 message = Message(
@@ -208,7 +204,7 @@ class CreateCourseRegistrationSerializer(serializers.Serializer):
             attrs['student'] = student
             attrs['teacher'] = teacher
             attrs['course'] = course
-            attrs['lessons_left'] = course.number_of_lessons
+            attrs['lessons_left'] = attrs.pop('number_of_lessons', course.number_of_lessons)
         except Student.DoesNotExist:
             raise serializers.ValidationError({
                 'student_id': 'Student not found'
@@ -278,3 +274,25 @@ class ListBookingSerializer(serializers.ModelSerializer):
     class Meta:
         model = Booking
         fields = ("datetime", "duration", "course_name", "instructor_name", "code", "status",  "is_group")
+
+class CreateUnavailableTimeOneTimeSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = UnavailableTimeOneTime
+        fields = ['date', 'start', 'stop', 'teacher', 'code']
+        read_only_fields = ['code']
+
+class CreateUnavailableTimeRegularSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = UnavailableTimeRegular
+        fields = ['day', 'start', 'stop', 'teacher', 'code']
+        read_only_fields = ['code']
+
+class ListUnavailableTimeOneTimeSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = UnavailableTimeOneTime
+        fields = ['date', 'start', 'stop', 'code']
+
+class ListUnavailableTimeRegularSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = UnavailableTimeRegular
+        fields = ['day', 'start', 'stop', 'code']

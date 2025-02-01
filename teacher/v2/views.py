@@ -10,24 +10,26 @@ from datetime import timedelta
 import pytz
 from dateutil.parser import isoparse
 
-from teacher.models import Teacher, TeacherCourses
+from teacher.models import Teacher, UnavailableTimeOneTime
 from teacher.v2.serializers import (
     ListCourseSerializer, CourseDetailSerializer, CreateCourseSerializer,
     ListCourseRegistrationSerializer, CourseRegistrationDetailSerializer, CreateCourseRegistrationSerializer,
     ListStudentSerializer, ProfileSerializer,
     LessonDetailSerializer, ListLessonSerializer,
-    ListBookingSerializer
+    ListBookingSerializer, 
+    CreateUnavailableTimeOneTimeSerializer, CreateUnavailableTimeRegularSerializer,
+    ListUnavailableTimeOneTimeSerializer, ListUnavailableTimeRegularSerializer
 )
 from student.models import Student, StudentTeacherRelation, CourseRegistration, Lesson, Booking
 from school.models import Course
 from core.serializers import CreateUserSerializer
-from utils.util import send_notification, create_calendar_event, delete_google_calendar_event
-from internal.permissions import IsTeacher
+from utils.notification_utils import send_notification, create_calendar_event, delete_google_calendar_event
+from internal.permissions import IsTeacher, IsManager
 
 gmt7 = pytz.timezone('Asia/Bangkok')
 
 class CourseViewset(ViewSet):
-    permission_classes = [IsAuthenticated, IsTeacher]
+    permission_classes = [IsAuthenticated, IsManager, IsTeacher]
 
     def list(self, request):
         teacher_courses = Course.objects.filter(
@@ -44,13 +46,6 @@ class CourseViewset(ViewSet):
             serializer.save()
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-    def remove(self, request, uuid):
-        teacher_course = get_object_or_404(
-            TeacherCourses, teacher__user_id=request.user.id, course__uuid=uuid
-        )
-        teacher_course.delete()
-        return Response(status=status.HTTP_204_NO_CONTENT)
 
     def retrieve(self, request, uuid):
         course = get_object_or_404(
@@ -87,8 +82,14 @@ class ProfileViewSet(ViewSet):
 
 
 class StudentViewSet(ViewSet):
-    permission_classes = [IsAuthenticated, IsTeacher]
-
+    # permission_classes = [IsAuthenticated, IsTeacher]
+    
+    def get_permissions(self):
+        """Apply IsManager only to the create method"""
+        if self.action == "create":
+            return [IsAuthenticated(), IsTeacher(), IsManager()]
+        return [IsAuthenticated(), IsTeacher()]
+    
     def list(self, request):
         students = StudentTeacherRelation.objects.filter(
             teacher__user_id=request.user.id
@@ -137,8 +138,12 @@ class StudentViewSet(ViewSet):
     
 
 class RegistrationViewset(ViewSet):
-    permission_classes = [IsAuthenticated, IsTeacher]
-
+    def get_permissions(self):
+        """Apply IsManager only to the create method"""
+        if self.action == "create":
+            return [IsAuthenticated(), IsTeacher(), IsManager()]
+        return [IsAuthenticated(), IsTeacher()]
+    
     def list(self, request):
         filters = {"teacher__user_id": request.user.id}
         if student_uuid := request.GET.get("student_uuid"):
@@ -158,7 +163,9 @@ class RegistrationViewset(ViewSet):
         return Response(serializer.data)
 
     def create(self, request):
-        serializer = CreateCourseRegistrationSerializer(data=request.data)
+        data = request.data.copy()
+        data["teacher_id"] = request.user.id
+        serializer = CreateCourseRegistrationSerializer(data=data)
         if serializer.is_valid():
             registration = serializer.save()
             return Response({"registration_id": registration.uuid}, status=status.HTTP_201_CREATED)
@@ -182,6 +189,19 @@ class LessonViewset(ViewSet):
 
         if lesson_status:
             filters["status__in"] = [status_mapping[status] for status in lesson_status if status in status_mapping]
+
+        # Fetch lessons by month
+        month = request.query_params.get("month")
+        year = request.query_params.get("year")
+        if month and year:
+            try:
+                month = int(month)
+                year = int(year)
+                start_date = timezone.datetime(year, month, 1, tzinfo=timezone.utc)
+                end_date = (start_date + timedelta(days=32)).replace(day=1)
+                filters["datetime__range"] = (start_date, end_date)
+            except ValueError:
+                return Response({"error": "Invalid month or year"}, status=status.HTTP_400_BAD_REQUEST)
 
         is_bangkok_time = request.GET.get("bangkok_time", "true").lower() == "true"
 
@@ -254,3 +274,39 @@ class LessonViewset(ViewSet):
         lesson.status = "CON"
         lesson.save()
         return Response({"success": "Lesson confirmed successfully."}, status=status.HTTP_200_OK)
+
+class UnavailableTimeViewSet(ViewSet):
+    permission_classes = [IsAuthenticated, IsTeacher]
+
+    def create_onetime(self, request):
+        data = request.data.copy()
+        data["teacher"] = request.user.teacher.id
+        serializer = CreateUnavailableTimeOneTimeSerializer(data=data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    # def create_regular(self, request):
+    #     data = request.data.copy()
+    #     data["teacher"] = request.user.teacher.id
+    #     serializer = CreateUnavailableTimeRegularSerializer(data=data)
+    #     if serializer.is_valid():
+    #         serializer.save()
+    #         return Response(serializer.data, status=status.HTTP_201_CREATED)
+    #     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def list(self, request):
+        teacher = request.user.teacher
+        onetime_unavailable = UnavailableTimeOneTime.objects.filter(teacher=teacher)
+        # regular_unavailable = UnavailableTimeRegular.objects.filter(teacher=teacher)
+        onetime_serializer = ListUnavailableTimeOneTimeSerializer(onetime_unavailable, many=True)
+        # regular_serializer = ListUnavailableTimeRegularSerializer(regular_unavailable, many=True)
+        return Response({
+            "onetime": onetime_serializer.data,
+        }, status=status.HTTP_200_OK)
+
+    def remove(self, request, code):
+        onetime_unavailable = get_object_or_404(UnavailableTimeOneTime, code=code, teacher=request.user.teacher)
+        onetime_unavailable.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)

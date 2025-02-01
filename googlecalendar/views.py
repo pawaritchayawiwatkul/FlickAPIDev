@@ -9,7 +9,7 @@ from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework_simplejwt.tokens import AccessToken, RefreshToken
-from utils.util import encrypt_token, decrypt_token
+from utils.notification_utils import encrypt_token, decrypt_token
 from django.utils import timezone
 from django.shortcuts import render
 

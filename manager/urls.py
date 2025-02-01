@@ -44,9 +44,9 @@ clientDetailViewSet = views.ClientViewSet.as_view({
     "get": "retrieve"
 })
 
-clientRegistrationViewSet = views.RegistrationViewset.as_view({
-    'get': "list",
-    'post': 'create'
+clientRegistrationViewSet = views.ClientViewSet.as_view({
+    'get': "list_registration",
+    'post': 'create_registration'
 })
 
 courseViewSet = views.CourseViewset.as_view({

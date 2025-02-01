@@ -3,24 +3,14 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.decorators import permission_classes
 from rest_framework.viewsets import ViewSet
 from rest_framework.response import Response
-from teacher.models import Teacher, TeacherCourses
-from teacher.serializers import TeacherStudentUpdateSerializer, StudentSearchSerializer, SchoolSerializer, UnavailableTimeSerializer, LessonSerializer, TeacherCourseDetailwithStudentSerializer, TeacherCourseDetailSerializer, RegularUnavailableSerializer, OnetimeUnavailableSerializer, UnavailableTimeOneTime, UnavailableTimeRegular, TeacherCourseListSerializer, CourseSerializer, ProfileSerializer, ListStudentSerializer, ListCourseRegistrationSerializer, CourseRegistrationSerializer, ListLessonSerializer
-from student.models import Student, StudentTeacherRelation, CourseRegistration, Lesson
-from django.core.exceptions import ValidationError
+from teacher.models import Teacher
+from teacher.serializers import ProfileSerializer
 from rest_framework.views import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.viewsets import ViewSet
-from django.db.models import Prefetch
-from utils.util import merge_schedule, compute_available_time, is_available, send_notification, create_calendar_event, delete_google_calendar_event, send_lesson_confirmation_email, send_cancellation_email_html
 from django.utils import timezone
-from datetime import datetime, timedelta
-from django.db.models import Prefetch
 import pytz
-from dateutil.parser import isoparse  # Use this for ISO 8601 parsing
-from core.serializers import CreateUserSerializer
-from rest_framework import status
-from django.db.utils import IntegrityError
 
 _timezone =  timezone.get_current_timezone()
 gmt7 = pytz.timezone('Asia/Bangkok')

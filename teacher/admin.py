@@ -1,14 +1,10 @@
 from django.contrib import admin
-
-# Register your models here.
-from django.contrib import admin
-from .models import Teacher, UnavailableTimeOneTime, UnavailableTimeRegular, Lesson
+from teacher.models import Teacher, UnavailableTimeOneTime, UnavailableTimeRegular, AvailableTime, Lesson
 
 @admin.register(Teacher)
 class TeacherAdmin(admin.ModelAdmin):
     list_display = ('user', 'school')
     search_fields = ('user__first_name', 'school__name')
-    filter_horizontal = ('course',)
 
 @admin.register(Lesson)
 class LessonAdmin(admin.ModelAdmin):
@@ -34,14 +30,20 @@ class LessonAdmin(admin.ModelAdmin):
         }),
     )
 
-# @admin.register(UnavailableTimeOneTime)
-# class UnavailableTimeOneTimeAdmin(admin.ModelAdmin):
-#     list_display = ('start', 'stop', 'teacher')
-#     search_fields = ('teacher__user__first_name',)
-#     list_filter = ('start',)
+@admin.register(UnavailableTimeOneTime)
+class UnavailableTimeOneTimeAdmin(admin.ModelAdmin):
+    list_display = ('date', 'start', 'stop', 'teacher')
+    search_fields = ('teacher__user__first_name', 'teacher__user__last_name')
+    list_filter = ('date',)
 
-# @admin.register(UnavailableTimeRegular)
-# class UnavailableTimeRegularAdmin(admin.ModelAdmin):
-#     list_display = ('day', 'start', 'stop', 'teacher')
-#     search_fields = ('teacher__user__first_name',)
-#     list_filter = ('day',)
+@admin.register(UnavailableTimeRegular)
+class UnavailableTimeRegularAdmin(admin.ModelAdmin):
+    list_display = ('day', 'start', 'stop', 'teacher')
+    search_fields = ('teacher__user__first_name', 'teacher__user__last_name')
+    list_filter = ('day',)
+
+@admin.register(AvailableTime)
+class AvailableTimeAdmin(admin.ModelAdmin):
+    list_display = ('day', 'start', 'stop', 'teacher')
+    search_fields = ('teacher__user__first_name', 'teacher__user__last_name')
+    list_filter = ('day',)

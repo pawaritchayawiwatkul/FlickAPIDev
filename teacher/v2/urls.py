@@ -5,10 +5,12 @@ from .views import (
     ProfileViewSet,
     StudentViewSet,
     RegistrationViewset,
-    LessonViewset
+    LessonViewset,
+    UnavailableTimeViewSet
 )
 
 app_name = 'teacher'
+
 
 urlpatterns = [
     # Course endpoints
@@ -36,4 +38,9 @@ urlpatterns = [
     path('lessons/<str:code>/confirm/', LessonViewset.as_view({'put': 'confirm'}), name='lesson-confirm'),
     # path('lessons/<str:code>/attended/', LessonViewset.as_view({'put': 'attended'}), name='lesson-attended'),
     # path('lessons/<str:code>/missed/', LessonViewset.as_view({'put': 'missed'}), name='lesson-missed'),
+
+    # Unavailable Time endpoints
+    path('unavailable/', UnavailableTimeViewSet.as_view({'get': 'list'}), name='unavailable-list'),
+    path('unavailable/onetime', UnavailableTimeViewSet.as_view({'post': 'create_onetime',}), name='unavailable-onetime'),
+    path('unavailable/<slug:code>/remove', UnavailableTimeViewSet.as_view({'delete': 'remove'}), name='unavailable-remove'),
 ]

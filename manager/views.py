@@ -3,15 +3,18 @@ from rest_framework.viewsets import ViewSet
 from rest_framework.response import Response
 from django.db.models import Prefetch, Sum, Count
 from datetime import datetime, timedelta
-from student.models import Lesson, CourseRegistration, StudentTeacherRelation, Student
+from student.models import Lesson, CourseRegistration, StudentTeacherRelation, Student, Booking
 from school.models import School, Course  # Ensure Admin model is imported
-from teacher.models import Teacher
+from teacher.models import Teacher, AvailableTime
 from manager.models import Admin
-from manager.serializers import CourseRegistrationSerializer, CourseSerializer
+from manager.serializers import ( 
+    CourseRegistrationSerializer, CourseSerializer, PurchaseSerializer, AvailableTimeSerializer
+)
 from core.serializers import CreateUserSerializer, UserUpdateSerializer
 from rest_framework import status
 from django.db.utils import IntegrityError
 from internal.permissions import IsManager
+from rest_framework.viewsets import ModelViewSet
 
 class InsightViewSet(ViewSet):
     permission_classes = [IsAuthenticated, IsManager]
@@ -30,7 +33,7 @@ class InsightViewSet(ViewSet):
             purchases=Count("course__registration", distinct=True),
             staffs=Count("teacher", distinct=True),
             clients=Count("student", distinct=True),
-            weekly_class=Count("course__registration__lesson", distinct=True),
+            weekly_class=Count("course__lesson", distinct=True),
         ).first()  # Fetch the first (and only) result for this school
 
         # Prepare the analysis dictionary
@@ -67,61 +70,60 @@ class CalendarViewSet(ViewSet):
         # Prefetch data for the admin's school
         school = School.objects.prefetch_related(
             Prefetch(
-                'teacher',
-                queryset=Teacher.objects.prefetch_related(Prefetch("guestlesson", to_attr="guestlessons"), Prefetch(
-                    "registration__lesson",
-                    queryset=
-                    Lesson.objects.prefetch_related(
-                    Prefetch('registration', queryset=CourseRegistration.objects.prefetch_related(
-                        'course', 'student__user'
-                    ))
-                ))
+            "teacher",  # Prefetch all teachers
+            queryset=Teacher.objects.prefetch_related(
+                Prefetch(
+                "lesson",  # Prefetch lessons related to each teacher
+                queryset=Lesson.objects.select_related("course").prefetch_related(
+                    Prefetch(
+                    "booking",  # Prefetch students related to each lesson
+                    queryset=Booking.objects.select_related("student__user"),
+                    to_attr="prefetched_bookings"
+                    )
+                ),
+                to_attr="prefetched_lessons",
+                )
             ),
-        )).filter(id=admin.school.id).first()
+            to_attr="prefetched_teachers"
+            )
+        ).filter(id=admin.school_id).first()
 
         if not school:
             return Response({"error": "School not found."}, status=404)
 
         # Construct response data
         reg_lessons = []
-        guest_lessons = []
-        for teacher in school.teacher.all():
-            registrations = teacher.__dict__["_prefetched_objects_cache"]["registration"]
-            for registration in registrations:
-                lessons = registration.__dict__["_prefetched_objects_cache"]["lesson"]
-                for lesson in lessons:
-                    start_time = lesson.booked_datetime
-                    finish_time = lesson.booked_datetime + timedelta(minutes=lesson.registration.course.duration)
+
+        for teacher in getattr(school, "prefetched_teachers", []):
+            for lesson in getattr(teacher, "prefetched_lessons", []):
+                start_time = lesson.datetime
+                finish_time = lesson.datetime + timedelta(minutes=lesson.course.duration)
+
+                for lesson in getattr(teacher, "prefetched_lessons", []):
+                    start_time = lesson.datetime
+                    finish_time = lesson.datetime + timedelta(minutes=lesson.course.duration)
                     reg_lessons.append({
                         "code": lesson.code,
                         "start_time": start_time.isoformat(),
                         "end_time": finish_time.isoformat(),
-                        "course_name": registration.course.name,
-                        "course_uuid": registration.course.uuid,
-                        "student_first_name": registration.student.user.first_name,
-                        "student_last_name": registration.student.user.last_name,
-                        "student_uuid": registration.student.user.uuid,
+                        "course_name": lesson.course.name,
+                        "course_uuid": lesson.course.uuid,
                         "teacher_first_name": teacher.user.first_name,
                         "teacher_last_name": teacher.user.last_name,
                         "teacher_uuid": teacher.user.uuid,
-                    })
-            for lesson in teacher.guestlessons:
-                guest_lessons.append({
-                    "code": lesson.code,
-                    "status": lesson.status,  
-                    "notes": lesson.notes,
-                    "email": lesson.email, 
-                    "datetime": lesson.datetime,
-                    "online": lesson.status
-                })
-                
+                        "students" : [
+                            {
+                                "student_first_name": booking.student.user.first_name,
+                                "student_last_name": booking.student.user.last_name,
+                                "student_uuid": booking.student.user.uuid,
+                                "profile_url": booking.student.user.profile_image.url if booking.student.user.profile_image else "",
+                            }                     
+                            for booking in getattr(lesson, "prefetched_bookings", [])
+                        ]
+                      })
 
-        response_data = {
-            "lesson": reg_lessons,
-            "guest_lesson": guest_lessons
-        }
 
-        return Response(response_data, status=200)
+        return Response(reg_lessons, status=200)
 
 class CourseRegistrationViewSet(ViewSet):
     permission_classes = [IsAuthenticated, IsManager]
@@ -143,31 +145,37 @@ class CourseRegistrationViewSet(ViewSet):
         if not school:
             return Response({"error": "School not found."}, status=404)
 
-        # Prepare the response data for purchases
-        purchases = []
-        for teacher in school.teacher.all():
-            registrations = teacher.__dict__["_prefetched_objects_cache"].get("registration", [])
-            for registration in registrations:
-                student = registration.student  # Accessing student data
-                course = registration.course    # Accessing course data
+        # Prefetch data for the admin's school, including registration and related student/course data
+        # Prefetch teachers with their registrations and store them in `prefetched_teachers`
+        school = School.objects.prefetch_related(
+            Prefetch(
+                "teacher",  # Prefetch all teachers related to the school
+                queryset=Teacher.objects.prefetch_related(
+                    Prefetch(
+                        "registration",  # Prefetch registrations related to each teacher
+                        queryset=CourseRegistration.objects.select_related("course", "student__user"),
+                        to_attr="prefetched_registrations",  # Store prefetched registrations in this attribute
+                    )
+                ),
+                to_attr="prefetched_teachers"  # Store prefetched teachers in this attribute
+            )
+        ).filter(id=admin.school.id).first()
 
-                # Format the purchase details
-                purchases.append({
-                    "uuid": registration.uuid,  # Assuming the ID of registration is needed
-                    "student_first_name": student.user.first_name,
-                    "student_last_name": student.user.last_name,
-                    # "avatar_url": student.avatar_url if student.avatar_url else "default-avatar-url",  # Handle missing avatar
-                    "student_uuid": student.user.uuid,
-                    "registered_date": registration.registered_date.isoformat(),  # Use booked datetime for the purchase time
-                    "course_name": course.name,
-                    "course_uuid": course.uuid,
-                    "amount": f"${registration.paid_price:.2f}" if registration.paid_price else 0.0,  # Assuming the `amount` field is on registration and formatted as needed
-                    "profile_image": registration.profile_image.url if registration.profile_image else "",  # Assuming the payment slip is a file field,
-                    "payment_status": registration.payment_status,
-                })
+        if not school:
+            return Response({"error": "School not found."}, status=404)
 
-        # Return the formatted response with purchases
-        return Response({"purchases": purchases})
+        # Collect registrations from the prefetched teachers
+        purchases = [
+            registration
+            for teacher in getattr(school, "prefetched_teachers", [])
+            for registration in getattr(teacher, "prefetched_registrations", [])
+        ]
+
+        # Serialize the data using the optimized serializer
+        purchases_data = PurchaseSerializer(purchases, many=True).data
+
+        return Response({"purchases": purchases_data})
+    
     
     def payment_validation(self, request, uuid):
         # Retrieve the Admin instance for the logged-in user
@@ -328,8 +336,20 @@ class StaffViewSet(ViewSet):
             user = user_serializer.save(is_teacher=True)
 
             # Create the Teacher instance and associate with the School
-            Teacher.objects.create(user=user, school=admin.school)
+            teacher = Teacher.objects.create(user=user, school=admin.school)
 
+            # Create AvailableTime instances for the teacher using bulk create
+            available_times = request.data.get('available_time', [])
+            available_time_objects = [
+                AvailableTime(
+                    teacher=teacher,
+                    day=time['date'],
+                    start=time['start'],
+                    stop=time['stop']
+                )
+                for time in available_times
+            ]
+            AvailableTime.objects.bulk_create(available_time_objects)
 
             return Response(user_serializer.data, status=status.HTTP_201_CREATED)
         except IntegrityError as e:
@@ -482,11 +502,8 @@ class ClientViewSet(ViewSet):
             }, status=status.HTTP_200_OK)
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-        
-class RegistrationViewset(ViewSet):
-    permission_classes = [IsAuthenticated, IsManager]
 
-    def list(self, request, uuid):
+    def list_registration(self, request, uuid):
         # Retrieve the Admin instance for the logged-in user
         admin = Admin.objects.filter(user_id=request.user.id).first()
         if not admin:
@@ -510,13 +527,13 @@ class RegistrationViewset(ViewSet):
                 "registration_uuid": registration.uuid,  # Using UUID as a unique identifier
                 "course_name": registration.course.name,
                 "registration_date": registration.registered_date,
-                "paid_price": registration.paid_price
+                "paid_price": registration.paid_price,
+                "lessons_left": registration.lessons_left
             })
 
         return Response({"registrations": registrations})
         
-
-    def create(self, request, uuid=None):
+    def create_registration(self, request, uuid=None):
         # Check if the student exists
         try:
             student = Student.objects.get(user__uuid=uuid)
@@ -533,6 +550,10 @@ class RegistrationViewset(ViewSet):
             return Response(serializer.data, status=status.HTTP_201_CREATED)
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+# class RegistrationViewset(ViewSet):
+#     permission_classes = [IsAuthenticated, IsManager]
+
 
 class CourseViewset(ViewSet):
     permission_classes = [IsAuthenticated, IsManager]
@@ -563,3 +584,82 @@ class CourseViewset(ViewSet):
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+class AvailableTimeViewSet(ViewSet):
+    permission_classes = [IsAuthenticated, IsManager]
+    serializer_class = AvailableTimeSerializer
+
+    def list(self, request):
+        # Retrieve the Admin instance for the logged-in user
+        admin = Admin.objects.filter(user_id=request.user.id).first()
+        if not admin:
+            return Response({"error": "Admin not found for the current user."}, status=404)
+
+        # Return available times for the teachers in the admin's school
+        available_times = AvailableTime.objects.filter(teacher__school=admin.school)
+        serializer = AvailableTimeSerializer(available_times, many=True)
+        return Response(serializer.data)
+
+    def create(self, request):
+        # Retrieve the Admin instance for the logged-in user
+        admin = Admin.objects.filter(user_id=request.user.id).first()
+        if not admin:
+            return Response({"error": "Admin not found for the current user."}, status=404)
+
+        # Ensure the teacher belongs to the admin's school
+        serializer = AvailableTimeSerializer(data=request.data)
+        if serializer.is_valid():
+            teacher = serializer.validated_data['teacher']
+            if teacher.school != admin.school:
+                return Response({"error": "Teacher does not belong to the admin's school."}, status=400)
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def retrieve(self, request, code=None):
+        # Retrieve the Admin instance for the logged-in user
+        admin = Admin.objects.filter(user_id=request.user.id).first()
+        if not admin:
+            return Response({"error": "Admin not found for the current user."}, status=404)
+
+        # Retrieve the available time instance
+        try:
+            available_time = AvailableTime.objects.get(code=code, teacher__school=admin.school)
+        except AvailableTime.DoesNotExist:
+            return Response({"error": "Available time not found."}, status=404)
+
+        serializer = AvailableTimeSerializer(available_time)
+        return Response(serializer.data)
+
+    def update(self, request, code=None):
+        # Retrieve the Admin instance for the logged-in user
+        admin = Admin.objects.filter(user_id=request.user.id).first()
+        if not admin:
+            return Response({"error": "Admin not found for the current user."}, status=404)
+
+        # Retrieve the available time instance
+        try:
+            available_time = AvailableTime.objects.get(code=code, teacher__school=admin.school)
+        except AvailableTime.DoesNotExist:
+            return Response({"error": "Available time not found."}, status=404)
+
+        serializer = AvailableTimeSerializer(available_time, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def destroy(self, request, code=None):
+        # Retrieve the Admin instance for the logged-in user
+        admin = Admin.objects.filter(user_id=request.user.id).first()
+        if not admin:
+            return Response({"error": "Admin not found for the current user."}, status=404)
+
+        # Retrieve the available time instance
+        try:
+            available_time = AvailableTime.objects.get(code=code, teacher__school=admin.school)
+        except AvailableTime.DoesNotExist:
+            return Response({"error": "Available time not found."}, status=404)
+
+        available_time.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)

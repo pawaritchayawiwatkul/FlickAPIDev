@@ -1,19 +1,16 @@
-from django.db import models
+from django.db import models, transaction
 from core.models import User
 from school.models import School, Course
 import random
 import string
+from utils.schedule_utils import compute_available_time
+import uuid
 
 # Create your models here.
 
-class TeacherCourses(models.Model):
-    teacher = models.ForeignKey("Teacher", on_delete=models.CASCADE)
-    course = models.ForeignKey(Course, on_delete=models.CASCADE)
-    favorite = models.BooleanField(default=False)
     
 class Teacher(models.Model):
     user = models.OneToOneField(User, models.CASCADE)
-    course = models.ManyToManyField(Course, through=TeacherCourses, related_name="teachers")
     school = models.ForeignKey(School, models.CASCADE, related_name="teacher")
 
     def __str__(self) -> str:
@@ -77,7 +74,27 @@ class UnavailableTimeRegular(models.Model):
         if self.code is None or self.code == "":
             self.code = self._generate_unique_code(12)
         super(UnavailableTimeRegular, self).save(*args, **kwargs)
-            
+
+
+class AvailableTime(models.Model):
+    DAY_CHOICES = [
+        ('1', 'Monday'),
+        ('2', 'Tuesday'),
+        ('3', 'Wednesday'),
+        ('4', 'Thursday'),
+        ('5', 'Friday'),
+        ('6', 'Saturday'),
+        ('7', 'Sunday'),
+    ]
+    day = models.CharField(max_length=1, choices=DAY_CHOICES)
+    start = models.TimeField()
+    stop = models.TimeField()
+    teacher = models.ForeignKey(Teacher, models.CASCADE, related_name="available_times")
+    uuid = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
+
+    def __str__(self):
+        return f"{self.get_day_display()} {self.start} - {self.stop}"
+    
 class Lesson(models.Model):
     STATUS_CHOICES = [
         ('PENTE', 'PendingTeacher'),
@@ -86,7 +103,7 @@ class Lesson(models.Model):
         ('CAN', 'Canceled'),
         ('AVA', 'Available'),
     ]
-    
+
     code = models.CharField(max_length=12, unique=True)
     datetime = models.DateTimeField()
     status = models.CharField(choices=STATUS_CHOICES, max_length=5, default="PENTE")
@@ -94,80 +111,90 @@ class Lesson(models.Model):
     teacher = models.ForeignKey(to=Teacher, on_delete=models.PROTECT, related_name="lesson", null=True, blank=True)
     
     number_of_client = models.IntegerField(default=0)
+    available_time = models.ForeignKey(to=AvailableTime, on_delete=models.CASCADE, related_name="lesson")
 
     notified = models.BooleanField(default=False)
     student_event_id = models.CharField(null=True, blank=True)
     teacher_event_id = models.CharField(null=True, blank=True)
-    
+
     def generate_unique_code(self, length=8):
         """Generate a unique random code."""
         characters = string.ascii_letters + string.digits
-        code = ''.join(random.choice(characters) for _ in range(length))
-        return code
-    
+        return ''.join(random.choice(characters) for _ in range(length))
+
     def _generate_unique_code(self, length):
         """Generate a unique code and ensure it's not already in the database."""
         code = self.generate_unique_code(length)
         while Lesson.objects.filter(code=code).exists():
             code = self.generate_unique_code(length)
         return code
-    
+
+    def remove_conflicting_lessons(self):
+        """Remove lessons that conflict with this lesson's time if course.is_course is False."""
+        if not self.course.is_group:
+            conflicting_lessons = Lesson.objects.filter(
+                teacher=self.teacher,
+                datetime__gte=self.available_time.start,
+                datetime__lt=self.available_time.stop,
+                status__in=['PENTE', 'AVA']  # Only remove pending and available lessons
+            )
+            conflicting_lessons.delete()
+
+    def regenerate_available_lessons(self):
+        """Recompute available lesson slots after removing conflicts."""
+        if not self.course.is_group:
+            # Get school settings
+            school_settings = self.teacher.school.settings
+            interval = school_settings.interval
+
+            # Compute available slots for the given teacher
+            unavailables = list(self.teacher.unavailable_once.all())
+            lessons = list(self.teacher.lesson.exclude(status__in=['CON', 'CAN']))
+            
+            available_slots = compute_available_time(
+                unavailables=unavailables,
+                lessons=lessons,
+                date_time=self.datetime.date(),
+                start=self.available_time.start,
+                stop=self.available_time.stop,
+                duration=self.course.duration,
+                interval=interval
+            )
+
+            # Track already generated codes in memory
+            generated_codes = set(Lesson.objects.values_list('code', flat=True))
+
+            new_lessons = []
+            for slot in available_slots:
+                while True:
+                    lesson_code = self._generate_unique_code(12)
+                    if lesson_code not in generated_codes:
+                        generated_codes.add(lesson_code)  # Add to the tracking set
+                        break  # Unique code found, exit loop
+
+                new_lessons.append(
+                    Lesson(
+                        code=lesson_code,
+                        datetime=slot['start'],
+                        status='AVA',
+                        course=self.course,
+                        teacher=self.teacher,
+                        available_time=self.available_time
+                    )
+                )
+
+            # Bulk insert new available lessons
+            if new_lessons:
+                Lesson.objects.bulk_create(new_lessons, batch_size=100)
+
     def save(self, *args, **kwargs):
-        if self.code is None or self.code == "":
-            self.code = self._generate_unique_code(12)
-        super(Lesson, self).save(*args, **kwargs)
+        with transaction.atomic():  # Ensure database consistency
+            if not self.code:
+                self.code = self._generate_unique_code(12)
 
-    def generate_title(self, is_teacher):
-        duration = self.course.duration
-        title = f"{self.course.name} - {duration} min"
-        return title
+            super(Lesson, self).save(*args, **kwargs)
 
-    def generate_description(self, is_teacher):
-        """
-        Generates a detailed description string for the lesson.
-
-        Args:
-            is_teacher (bool): Determines the perspective of the description.
-                                True for teacher, False for student.
-
-        Returns:
-            str: A formatted description string.
-        """
-        # Determine the mode of the lesson
-        mode = "Online" if self.online else "In-Person"
-
-        # Format the booked datetime
-        datetime_formatted = self.booked_datetime.strftime("%Y-%m-%d %H:%M %Z")
-
-        # Handle optional fields gracefully
-        notes_display = self.notes if self.notes else "N/A"
-
-        # Determine the subject user based on the perspective
-        if is_teacher:
-            subject_user = self.registration.student.user
-        else:
-            subject_user = self.registration.teacher.user
-
-        # Retrieve the full name and email of the subject user
-        full_name = f"{subject_user.first_name} {subject_user.last_name}"
-        email_display = subject_user.email if subject_user.email else "N/A"
-
-        # Retrieve course information
-        course = self.registration.course
-        course_name = course.name if course else "N/A"
-        course_description = course.description if course else "N/A"
-
-        # Construct the description string
-        description = (
-            f"Lesson Details:\n\n"
-            f"Name: {full_name}\n"
-            f"Email: {email_display}\n"
-            f"Course: {course_name}\n"
-            f"Course Description: {course_description}\n"
-            f"Date & Time: {datetime_formatted}\n"
-            f"Duration: {self.registration.course.duration} minutes\n"
-            f"Mode: {mode}\n"
-            f"Notes: {notes_display}\n"
-        )
-
-        return description
+            # Check if the lesson's course requires rescheduling
+            if not self.course.is_group:
+                self.remove_conflicting_lessons()  # Step 1: Remove conflicts
+                self.regenerate_available_lessons()  # Step 2: Regenerate available slots

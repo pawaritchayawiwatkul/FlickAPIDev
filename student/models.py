@@ -32,7 +32,7 @@ class CourseRegistration(models.Model):
     teacher_favorite = models.BooleanField(default=False)
 
     teacher = models.ForeignKey(Teacher, on_delete=models.SET_NULL, related_name="registration", null=True, blank=True)
-    course = models.ForeignKey(to=Course, on_delete=models.CASCADE, related_name="registration")
+    course = models.ForeignKey(to=Course, on_delete=models.PROTECT, related_name="registration")
     student = models.ForeignKey(to="Student", on_delete=models.CASCADE, related_name="registration")
     
     paid_price = models.FloatField(null=True)

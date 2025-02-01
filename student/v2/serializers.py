@@ -3,6 +3,8 @@ from student.models import CourseRegistration, Student, StudentTeacherRelation, 
 from teacher.models import Teacher, Lesson
 from school.models import Course
 from core.models import User
+from datetime import timedelta
+from django.utils.timezone import now
     
 class ListTeacherSerializer(serializers.ModelSerializer):
     first_name = serializers.CharField(source="teacher.user.first_name")
@@ -62,6 +64,10 @@ class CourseRegistrationSerializer(serializers.Serializer):
     payment_slip = serializers.FileField()
     
     def create(self, validated_data):
+        course = validated_data.get('course')
+        if not course.no_exp:
+            exp_range = course.exp_range
+            validated_data['exp_date'] = now().date() + timedelta(days=exp_range * 30)
         regis = CourseRegistration.objects.create(**validated_data)
         return regis
     
@@ -71,6 +77,7 @@ class CourseRegistrationSerializer(serializers.Serializer):
             course = Course.objects.get(uuid=course_id)
             attrs['course_id'] = course.id
             attrs['lessons_left'] = course.number_of_lessons
+            attrs['course'] = course  # Add course to attrs for use in create method
         except Student.DoesNotExist:
             raise serializers.ValidationError({
                 'user_id': 'User not found'
