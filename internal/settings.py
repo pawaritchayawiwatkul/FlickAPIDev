@@ -312,7 +312,7 @@ CELERY_BEAT_SCHEDULE = {
     # },
     'generate-upcoming-lessons-every-day': {
         'task': 'manager.tasks.generate_upcoming_lessons',
-        'schedule': crontab(hour=0, minute=1),  # Executes every day at 00:01
+        'schedule': crontab(hour=3, minute=5),  # Executes every day at 00:01
         'args': (),
     },
 }

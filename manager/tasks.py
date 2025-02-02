@@ -1,82 +1,74 @@
 from celery import shared_task
 from celery_singleton import Singleton
-from django.utils.timezone import now
 from django.db.models import Prefetch
-from datetime import timedelta
-from school.models import School, SchoolSettings, Course
+from school.models import School, Course, SchoolSettings
 from teacher.models import Lesson, Teacher
-from utils.schedule_utils import compute_available_time
-import string
-import random
+from django.utils.timezone import now
+from datetime import timedelta, datetime
+from utils.schedule_utils import compute_available_time, generate_unique_code
 
-def generate_unique_code(existing_codes, length=8):
-    """Generate a unique random code ensuring no duplicates."""
-    characters = string.ascii_letters + string.digits
-    while True:
-        code = ''.join(random.choices(characters, k=length))
-        if code not in existing_codes:
-            existing_codes.add(code)  # Append new code to prevent duplicates
-            return code
-
-
-@shared_task(base=Singleton)
-def generate_upcoming_lessons():
-    # Prefetch schools along with teachers and all necessary related data
-    schools = School.objects.prefetch_related(
-        Prefetch('teacher', queryset=Teacher.objects.prefetch_related(
-            Prefetch('unavailable_once', to_attr='cached_unavailables'),
-            Prefetch('lesson', to_attr='cached_lessons'),
-            Prefetch('available_times', to_attr='cached_available_times')
-        ), to_attr='cached_teachers')
-    ).select_related("settings").all()
-
+def generate_upcoming_private(schools):
+    new_lessons = []
     date_today = now().date()
     existing_codes = set(Lesson.objects.values_list('code', flat=True))
-
     for school in schools:
         # Fetch SchoolSettings (handle if missing)
         try:
             school_settings = school.settings  # One-to-One relation
             days_ahead = school_settings.days_ahead
-            interval = school_settings.interval
+            gap = school_settings.interval
         except SchoolSettings.DoesNotExist:
-            print(f"⚠ Warning: SchoolSettings missing for {school.name}, using defaults.")
             days_ahead = 21  # Default fallback
-            interval = 30  # Default fallback
+            gap = 30  # Default fallback
 
         teachers = school.cached_teachers  # Prefetched teachers
 
         for teacher in teachers:
             unavailables = teacher.cached_unavailables
             lessons = teacher.cached_lessons
-            available_times = teacher.cached_available_times
-
+            available_times = teacher.available_times
+            courses = teacher.cached_courses  # Prefetched courses
             for available_time in available_times:
-                start = available_time.start
-                stop = available_time.stop
-                courses = Course.objects.filter(school=school)
-
+                start = available_time['start']
+                stop = available_time['stop']
+                day_of_week = int(available_time['date'])
+                start = datetime.strptime(start, '%H:%M').time()
+                stop = datetime.strptime(stop, '%H:%M').time()            
                 for course in courses:
-                    new_lessons = []
-
                     for day_offset in range(days_ahead):
                         date_time = date_today + timedelta(days=day_offset)
-
-                        available_slots = compute_available_time(
-                            unavailables, lessons, date_time, start, stop, course.duration, interval
-                        )
-
-                        for slot in available_slots:
-                            lesson_code = generate_unique_code(existing_codes, 12)
-                            new_lessons.append(
-                                Lesson(
-                                    code=lesson_code,
-                                    datetime=slot['start'],
-                                    status='AVA',
-                                    course=course,
-                                    teacher=teacher
-                                )
+                        if date_time.isoweekday() == day_of_week:
+                            interval = course.duration + gap
+                            available_slots = compute_available_time(
+                                unavailables, lessons, date_time, start, stop, course.duration, interval 
                             )
+                            for slot in available_slots:
+                                lesson_code = generate_unique_code(existing_codes, 12)
+                                new_lessons.append(
+                                    Lesson(
+                                        code=lesson_code,
+                                        datetime=slot['start'],
+                                        status='AVA',
+                                        course=course,
+                                        teacher=teacher
+                                    )
+                                )
+    return new_lessons
 
-                    if new_lessons:
-                        Lesson.objects.bulk_create(new_lessons, batch_size=100)
+@shared_task(base=Singleton)
+def generate_upcoming_lessons():
+    # Prefetch schools along with teachers, courses, and all necessary related data
+    schools = School.objects.prefetch_related(
+        Prefetch('teacher', 
+                queryset=Teacher.objects.prefetch_related(
+                Prefetch('unavailable_once', to_attr='cached_unavailables'),
+                Prefetch('lesson', to_attr='cached_lessons'),
+                Prefetch('course',
+                    queryset=Course.objects.filter(is_group=False), to_attr='cached_courses')
+            ), to_attr='cached_teachers'),
+        ).select_related("settings").all()
+
+    new_lessons = generate_upcoming_private(schools)
+
+    if new_lessons:
+        Lesson.objects.bulk_create(new_lessons, batch_size=100)

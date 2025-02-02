@@ -14,7 +14,8 @@ class Teacher(models.Model):
     user = models.OneToOneField(User, models.CASCADE)
     school = models.ForeignKey(School, models.CASCADE, related_name="teacher")
     available_times = models.JSONField(default=list)  # Add available_times field
-
+    course = models.ManyToManyField(Course, related_name="teacher")
+    
     def clean(self):
         """Validate available_times field."""
         allowed_keys = {'date', 'start', 'stop'}
@@ -116,7 +117,8 @@ class Lesson(models.Model):
     teacher = models.ForeignKey(to=Teacher, on_delete=models.PROTECT, related_name="lesson", null=True, blank=True)
     
     number_of_client = models.IntegerField(default=0)
-    available_time = models.ForeignKey(to=Teacher, on_delete=models.deletion.CASCADE, blank=True, null=True, related_name='lesson'),
+
+    # stop_available = models.DateTimeField(null=True, blank=True)
 
     notified = models.BooleanField(default=False)
     student_event_id = models.CharField(null=True, blank=True)
@@ -139,67 +141,45 @@ class Lesson(models.Model):
         if not self.course.is_group:
             conflicting_lessons = Lesson.objects.filter(
                 teacher=self.teacher,
-                datetime__gte=self.available_time.start,
-                datetime__lt=self.available_time.stop,
+                datetime__lt=self.datetime + self.course.duration,
+                datetime__gt=self.datetime,
                 status__in=['PENTE', 'AVA']  # Only remove pending and available lessons
             )
             conflicting_lessons.delete()
 
-    def regenerate_available_lessons(self):
-        """Recompute available lesson slots after removing conflicts."""
+    def check_for_conflicts(self):
+        """Check for conflicting lessons when status is changed to 'CON'."""
         if not self.course.is_group:
-            # Get school settings
-            school_settings = self.teacher.school.settings
-            interval = school_settings.interval
-
-            # Compute available slots for the given teacher
-            unavailables = list(self.teacher.unavailable_once.all())
-            lessons = list(self.teacher.lesson.exclude(status__in=['CON', 'CAN']))
-            
-            available_slots = compute_available_time(
-                unavailables=unavailables,
-                lessons=lessons,
-                date_time=self.datetime.date(),
-                start=self.available_time.start,
-                stop=self.available_time.stop,
-                duration=self.course.duration,
-                interval=interval
+            conflicting_lessons = Lesson.objects.filter(
+                teacher=self.teacher,
+                datetime__lt=self.datetime + self.course.duration,
+                datetime__gt=self.datetime,
+                status='CON'
             )
-
-            # Track already generated codes in memory
-            generated_codes = set(Lesson.objects.values_list('code', flat=True))
-
-            new_lessons = []
-            for slot in available_slots:
-                while True:
-                    lesson_code = self._generate_unique_code(12)
-                    if lesson_code not in generated_codes:
-                        generated_codes.add(lesson_code)  # Add to the tracking set
-                        break  # Unique code found, exit loop
-
-                new_lessons.append(
-                    Lesson(
-                        code=lesson_code,
-                        datetime=slot['start'],
-                        status='AVA',
-                        course=self.course,
-                        teacher=self.teacher,
-                        available_time=self.available_time
-                    )
-                )
-
-            # Bulk insert new available lessons
-            if new_lessons:
-                Lesson.objects.bulk_create(new_lessons, batch_size=100)
+            if conflicting_lessons.exists():
+                raise ValidationError("There is a conflicting lesson during this time.")
 
     def save(self, *args, **kwargs):
         with transaction.atomic():  # Ensure database consistency
             if not self.code:
                 self.code = self._generate_unique_code(12)
 
+            # Check if the status is changing to 'CON'
+            if self.pk is None:
+                status_changed_to_confirm = True
+            elif self.status != 'CON':
+                status_changed_to_confirm = False
+            else:
+                previous_status = Lesson.objects.get(pk=self.pk).status
+                status_changed_to_confirm = self.status == 'CON' and previous_status != 'CON'
+
+            if status_changed_to_confirm:
+                self.check_for_conflicts()  # Check for conflicts before saving
+
             super(Lesson, self).save(*args, **kwargs)
 
-            # Check if the lesson's course requires rescheduling
-            if not self.course.is_group:
+            # Check if the lesson's course requires rescheduling and status changed to 'CON'
+            if not self.course.is_group and status_changed_to_confirm:
                 self.remove_conflicting_lessons()  # Step 1: Remove conflicts
-                self.regenerate_available_lessons()  # Step 2: Regenerate available slots
+                # self.regenerate_available_lessons()  # Step 2: Regenerate available slots
+                

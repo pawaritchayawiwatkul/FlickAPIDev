@@ -40,7 +40,7 @@ class Course(models.Model):
     exp_range = models.IntegerField(null=True, blank=True)
     duration = models.IntegerField(default=60)
     number_of_lessons = models.IntegerField(default=10)
-    school = models.ForeignKey(School, on_delete=models.CASCADE)
+    school = models.ForeignKey(School, on_delete=models.CASCADE, related_name="course")
     created_date = models.DateField(auto_now_add=True)
     price = models.FloatField(null=True, blank=True)
 
