@@ -14,9 +14,7 @@ from core.serializers import CreateUserSerializer, UserUpdateSerializer
 from rest_framework import status
 from django.db.utils import IntegrityError
 from internal.permissions import IsManager
-from rest_framework.viewsets import ModelViewSet
-from uuid import UUID
-from django.core.exceptions import ValidationError
+from django.db import transaction
 
 class InsightViewSet(ViewSet):
     permission_classes = [IsAuthenticated, IsManager]
@@ -356,38 +354,7 @@ class StaffViewSet(ViewSet):
                 return Response({"error": "A unique constraint was violated."}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
             return Response({"error": "An error occurred while creating the client."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-    def list_available(self, request, uuid):
-        # Retrieve the Admin instance for the logged-in user
-        admin = Admin.objects.filter(user_id=request.user.id).first()
-        if not admin:
-            return Response({"error": "Admin not found for the current user."}, status=404)
-
-        # Get teacher_uuid from request parameters
-        # Filter available times for the specified teacher in the admin's school
-        available_times = AvailableTime.objects.filter(teacher__user__uuid=uuid, teacher__school=admin.school)
-        serializer = AvailableTimeSerializer(available_times, many=True)
-        return Response(serializer.data)
-
-    def create_available(self, request, uuid):
-        # Retrieve the Admin instance for the logged-in user
-        admin = Admin.objects.filter(user_id=request.user.id).first()
-        if not admin:
-            return Response({"error": "Admin not found for the current user."}, status=404)
-
-        # Retrieve the teacher by their UUID and ensure they belong to the admin's school
-        try:
-            teacher = Teacher.objects.get(user__uuid=uuid, school=admin.school)
-        except Teacher.DoesNotExist:
-            return Response({"error": "Teacher not found or does not belong to the admin's school."}, status=404)
-
-        # Ensure the teacher belongs to the admin's school
-        serializer = AvailableTimeSerializer(data=request.data)
-        if serializer.is_valid():
-            serializer.save(teacher=teacher)
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-    
+        
 class ClientViewSet(ViewSet):
     permission_classes = [IsAuthenticated, IsManager]
 
@@ -606,57 +573,88 @@ class CourseViewset(ViewSet):
         
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+
 class AvailableTimeViewSet(ViewSet):
-    permission_classes = [IsAuthenticated, IsManager]
-    serializer_class = AvailableTimeSerializer
-
-    def retrieve(self, request, uuid=None):
-
+    def list(self, request, uuid=None):
         # Retrieve the Admin instance for the logged-in user
         admin = Admin.objects.filter(user_id=request.user.id).first()
         if not admin:
             return Response({"error": "Admin not found for the current user."}, status=404)
 
-        # Retrieve the available time instance
-        try:
-            available_time = AvailableTime.objects.get(uuid=uuid, teacher__school=admin.school)
-        except AvailableTime.DoesNotExist:
-            return Response({"error": "Available time not found."}, status=404)
-
-        serializer = AvailableTimeSerializer(available_time)
+        # Get teacher_uuid from request parameters
+        # Filter available times for the specified teacher in the admin's school
+        available_times = AvailableTime.objects.filter(teacher__user__uuid=uuid, teacher__school=admin.school)
+        serializer = AvailableTimeSerializer(available_times, many=True)
         return Response(serializer.data)
-
-    def update(self, request, uuid=None):
-
+    
+    def bulk_manage(self, request, uuid=None):
         # Retrieve the Admin instance for the logged-in user
         admin = Admin.objects.filter(user_id=request.user.id).first()
         if not admin:
-            return Response({"error": "Admin not found for the current user."}, status=404)
+            return Response({"error": "Admin not found for the current user."}, status=status.HTTP_404_NOT_FOUND)
 
-        # Retrieve the available time instance
-        try:
-            available_time = AvailableTime.objects.get(uuid=uuid, teacher__school=admin.school)
-        except AvailableTime.DoesNotExist:
-            return Response({"error": "Available time not found."}, status=404)
+        # Extract request data
+        create_data = request.data.get("create", [])
+        delete_uuids = request.data.get("delete", [])
+        update_data = request.data.get("update", [])
 
-        serializer = AvailableTimeSerializer(available_time, data=request.data, partial=True)
-        if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        updated_instances = []
+        created_instances = []
+        deleted_instances = []
+        errors = []
 
-    def remove(self, request, uuid=None):
+        teacher_uuid = uuid  # Use the `uuid` passed in URL for teacher
 
-        # Retrieve the Admin instance for the logged-in user
-        admin = Admin.objects.filter(user_id=request.user.id).first()
-        if not admin:
-            return Response({"error": "Admin not found for the current user."}, status=404)
+        # **Handle Bulk Updates**
+        if update_data:
+            update_uuids = [entry.get("uuid") for entry in update_data if entry.get("uuid")]
+            available_times = AvailableTime.objects.filter(uuid__in=update_uuids, teacher__school=admin.school, teacher__user__uuid=teacher_uuid)
+            available_time_dict = {str(at.uuid): at for at in available_times}
 
-        # Retrieve the available time instance
-        try:
-            available_time = AvailableTime.objects.get(uuid=uuid, teacher__school=admin.school)
-        except AvailableTime.DoesNotExist:
-            return Response({"error": "Available time not found."}, status=404)
+            for entry in update_data:
+                uuid = entry.get("uuid")
+                if uuid not in available_time_dict:
+                    errors.append({"uuid": uuid, "error": "UUID not found or not associated with your school"})
+                    continue
 
-        available_time.delete()
-        return Response(status=status.HTTP_204_NO_CONTENT)
+                # Update instance fields
+                available_time = available_time_dict[uuid]
+                available_time.day = entry.get("day", available_time.day)
+                available_time.start = entry.get("start", available_time.start)
+                available_time.stop = entry.get("stop", available_time.stop)
+                updated_instances.append(available_time)
+
+            if updated_instances:
+                with transaction.atomic():
+                    AvailableTime.objects.bulk_update(updated_instances, ["day", "start", "stop"])
+
+        # **Handle Bulk Deletions**
+        if delete_uuids:
+            deleted_count, _ = AvailableTime.objects.filter(uuid__in=delete_uuids, teacher__school=admin.school, teacher__user__uuid=teacher_uuid).delete()
+
+        # **Handle Bulk Creations**
+        if create_data:
+            if not teacher_uuid:
+                return Response({"error": "Teacher UUID is required for creation."}, status=status.HTTP_400_BAD_REQUEST)
+
+            try:
+                teacher = Teacher.objects.get(user__uuid=teacher_uuid, school=admin.school)
+            except Teacher.DoesNotExist:
+                return Response({"error": "Teacher not found or does not belong to the admin's school."}, status=status.HTTP_404_NOT_FOUND)
+
+            serializer = AvailableTimeSerializer(data=create_data, many=True)
+            if serializer.is_valid():
+                serializer.save(teacher=teacher)
+                created_instances = serializer.data
+            else:
+                errors.extend(serializer.errors)
+
+        # **Prepare Response**
+        response_data = {
+            "updated_count": len(updated_instances),
+            "deleted_count": deleted_count,
+            "created_count": len(created_instances),
+            "errors": errors
+        }
+
+        return Response(response_data, status=status.HTTP_200_OK)

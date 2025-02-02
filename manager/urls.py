@@ -34,15 +34,11 @@ staffClientViewSet = views.StaffViewSet.as_view({
     'get': "client"
 })
 
-availableTimeViewSet = views.StaffViewSet.as_view({
-    'get': 'list_available',
-    'post': 'create_available'
+availableTimeViewSet = views.AvailableTimeViewSet.as_view({
+    'get': 'list',
+    'put': 'bulk_manage'
 })
 
-availableTimeDetailViewSet = views.AvailableTimeViewSet.as_view({
-    'put': 'update',
-    'delete': 'remove'
-})
 
 clientViewSet = views.ClientViewSet.as_view({
     'get': "list",
@@ -85,5 +81,4 @@ urlpatterns = format_suffix_patterns([
 
     path('course', courseViewSet, name='course'),
 
-    path('available-time/<uuid:uuid>', availableTimeDetailViewSet, name='available-time-detail'),
 ])

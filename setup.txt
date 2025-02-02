@@ -24,10 +24,10 @@ print("✅ SchoolSettings generation complete!")
 // Upload Code
 cd dev_api 
 source env/bin/activate
-git clone https://github.com/pawaritchayawiwatkul/FlickAPIDev.git version18
-cp .env version18
-cp -r keys version18
-cd version18
+git clone https://github.com/pawaritchayawiwatkul/FlickAPIDev.git version19
+cp .env version19
+cp -r keys version19
+cd version19
 rm -rf utils.py 
 lsof -i :8000
 
