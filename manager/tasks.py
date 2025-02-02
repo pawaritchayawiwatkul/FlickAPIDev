@@ -26,14 +26,12 @@ def generate_upcoming_private(schools):
         for teacher in teachers:
             unavailables = teacher.cached_unavailables
             lessons = teacher.cached_lessons
-            available_times = teacher.available_times
+            available_times = teacher.cached_available_times  # Use cached available times
             courses = teacher.cached_courses  # Prefetched courses
             for available_time in available_times:
-                start = available_time['start']
-                stop = available_time['stop']
-                day_of_week = int(available_time['date'])
-                start = datetime.strptime(start, '%H:%M').time()
-                stop = datetime.strptime(stop, '%H:%M').time()            
+                start = available_time.start
+                stop = available_time.stop
+                day_of_week = int(available_time.day)          
                 for course in courses:
                     for day_offset in range(days_ahead):
                         date_time = date_today + timedelta(days=day_offset)
@@ -64,7 +62,8 @@ def generate_upcoming_lessons():
                 Prefetch('unavailable_once', to_attr='cached_unavailables'),
                 Prefetch('lesson', to_attr='cached_lessons'),
                 Prefetch('course',
-                    queryset=Course.objects.filter(is_group=False), to_attr='cached_courses')
+                    queryset=Course.objects.filter(is_group=False), to_attr='cached_courses'),
+                Prefetch('available_time', to_attr='cached_available_times'),  # Prefetch available times
             ), to_attr='cached_teachers'),
         ).select_related("settings").all()
 

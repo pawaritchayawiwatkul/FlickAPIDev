@@ -2,7 +2,7 @@ from rest_framework import serializers
 from student.models import CourseRegistration
 from rest_framework import serializers
 from student.models import  CourseRegistration, Student
-from teacher.models import Teacher, Lesson
+from teacher.models import Teacher, Lesson, AvailableTime
 from school.models import Course, School
 from dateutil.relativedelta import relativedelta
 from datetime import date, timedelta
@@ -208,4 +208,7 @@ class RegistrationSerializer(serializers.ModelSerializer):
         model = CourseRegistration
         fields = ['registration_uuid', 'course_name', 'registration_date', 'paid_price']
 
-
+class AvailableTimeSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AvailableTime
+        fields = ['uuid', 'day', 'start', 'stop']

@@ -13,26 +13,8 @@ from datetime import datetime
 class Teacher(models.Model):
     user = models.OneToOneField(User, models.CASCADE)
     school = models.ForeignKey(School, models.CASCADE, related_name="teacher")
-    available_times = models.JSONField(default=list)  # Add available_times field
+    # available_times = models.JSONField(default=list)  # Add available_times field
     course = models.ManyToManyField(Course, related_name="teacher")
-    
-    def clean(self):
-        """Validate available_times field."""
-        allowed_keys = {'date', 'start', 'stop'}
-        for time_slot in self.available_times:
-            if not allowed_keys.issuperset(time_slot.keys()):
-                raise ValidationError(f"Only 'date', 'start', and 'stop' fields are allowed in each time slot.")
-            if not all(key in time_slot for key in allowed_keys):
-                raise ValidationError("Each time slot must contain 'date', 'start', and 'stop' fields.")
-            if not (1 <= int(time_slot['date']) <= 7):
-                raise ValidationError("The 'date' field must be between 1 and 7.")
-            try:
-                start_time = datetime.strptime(time_slot['start'], '%H:%M').time()
-                stop_time = datetime.strptime(time_slot['stop'], '%H:%M').time()
-            except ValueError:
-                raise ValidationError("Time fields must be in HH:MM format.")
-            if start_time >= stop_time:
-                raise ValidationError("'start' time must be before 'stop' time.")
 
     def save(self, *args, **kwargs):
         self.clean()  # Validate before saving
@@ -101,6 +83,25 @@ class UnavailableTimeRegular(models.Model):
         super(UnavailableTimeRegular, self).save(*args, **kwargs)
 
 
+class AvailableTime(models.Model):
+    DAY_CHOICES = [
+        ('1', 'Monday'),
+        ('2', 'Tuesday'),
+        ('3', 'Wednesday'),
+        ('4', 'Thursday'),
+        ('5', 'Friday'),
+        ('6', 'Saturday'),
+        ('7', 'Sunday'),
+    ]
+    day = models.CharField(max_length=1, choices=DAY_CHOICES)
+    start = models.TimeField()
+    stop = models.TimeField()
+    teacher = models.ForeignKey(Teacher, models.CASCADE, related_name="available_time")
+    uuid = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
+
+    def __str__(self):
+        return f"{self.get_day_display()} {self.start} - {self.stop}"
+    
 class Lesson(models.Model):
     STATUS_CHOICES = [
         ('PENTE', 'PendingTeacher'),

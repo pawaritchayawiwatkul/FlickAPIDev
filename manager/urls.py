@@ -34,6 +34,16 @@ staffClientViewSet = views.StaffViewSet.as_view({
     'get': "client"
 })
 
+availableTimeViewSet = views.StaffViewSet.as_view({
+    'get': 'list_available',
+    'post': 'create_available'
+})
+
+availableTimeDetailViewSet = views.AvailableTimeViewSet.as_view({
+    'put': 'update',
+    'delete': 'remove'
+})
+
 clientViewSet = views.ClientViewSet.as_view({
     'get': "list",
     "post": "create"
@@ -55,6 +65,7 @@ courseViewSet = views.CourseViewset.as_view({
 })
 
 
+
 # Enter URL path below
 urlpatterns = format_suffix_patterns([
     path('insight', insightViewSet, name='insight'),
@@ -66,10 +77,13 @@ urlpatterns = format_suffix_patterns([
     path('staff', staffViewSet, name='staff-list'),
     path('staff/<slug:uuid>', staffDetailViewSet, name='staff-detail'),
     path('staff/<slug:uuid>/client', staffClientViewSet, name='staff-client'),
+    path('staff/<slug:uuid>/available-time', availableTimeViewSet, name='client-registration'),
 
     path('client', clientViewSet, name='client'),
     path('client/<slug:uuid>', clientDetailViewSet, name='client-detail'),
     path('client/<slug:uuid>/registration', clientRegistrationViewSet, name='client-registration'),
 
     path('course', courseViewSet, name='course'),
+
+    path('available-time/<uuid:uuid>', availableTimeDetailViewSet, name='available-time-detail'),
 ])
