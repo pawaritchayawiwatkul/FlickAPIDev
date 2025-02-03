@@ -34,12 +34,6 @@ class ProfileViewSet(ViewSet):
             return Response(ser.errors, status=400)
     
     def add(self, request, teacher_uuid):
-        user = request.user
-        teacher = get_object_or_404(Teacher, user__uuid=teacher_uuid)
-        student = get_object_or_404(Student, user_id=user.id)
-        if not student.teacher.filter(id=teacher.id).exists():
-            student.teacher.add(teacher)
-            student.school.add(teacher.school_id)        
         return Response(status=200)
     
     def destroy(self, request):

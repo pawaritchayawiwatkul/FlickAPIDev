@@ -125,7 +125,7 @@ class CreateCourseSerializer(serializers.ModelSerializer):
         return attrs
 
 class ListStudentSerializer(serializers.ModelSerializer):
-    name = serializers.SerializerMethodField()
+    name = serializers.CharField(source="student.user.get_full_name")
     phone_number = serializers.CharField(source="student.user.phone_number")
     email = serializers.CharField(source="student.user.email")
     uuid = serializers.CharField(source="student.user.uuid")
@@ -134,17 +134,15 @@ class ListStudentSerializer(serializers.ModelSerializer):
     class Meta:
         model = StudentTeacherRelation
         fields = ("name", "phone_number", "email", "uuid", "profile_image")
-
-    def get_name(self, obj:StudentTeacherRelation):
-        return f"{obj.student_first_name} {obj.student_last_name}"
         
 class ProfileSerializer(serializers.ModelSerializer):
     uuid = serializers.UUIDField(read_only=True)
     is_teacher = serializers.BooleanField(read_only=True)
+    is_manager = serializers.BooleanField(read_only=True)
     
     class Meta:
         model = User
-        fields = ("first_name", "last_name", "phone_number", "email", "uuid", "profile_image", "is_teacher")
+        fields = ("first_name", "last_name", "phone_number", "email", "uuid", "profile_image", "is_teacher", "is_manager")
 
 class ListCourseRegistrationSerializer(serializers.ModelSerializer):
     course_name = serializers.CharField(source="course.name")
@@ -195,11 +193,11 @@ class CreateCourseRegistrationSerializer(serializers.Serializer):
     
     def validate(self, attrs):
         student_id = attrs.pop("student_id")
-        user_id = attrs.pop("teacher_id")
+        teacher_id = attrs.pop("teacher_id")
         course_id = attrs.pop("course_id")
         try: 
             student = Student.objects.get(user__uuid=student_id)
-            teacher = Teacher.objects.get(user__id=user_id)
+            teacher = Teacher.objects.get(user__id=teacher_id)
             course = Course.objects.get(uuid=course_id)
             attrs['student'] = student
             attrs['teacher'] = teacher
@@ -211,7 +209,7 @@ class CreateCourseRegistrationSerializer(serializers.Serializer):
             })
         except Teacher.DoesNotExist:
             raise serializers.ValidationError({
-                'user_id': 'User not found'
+                'teacher_id': 'User not found'
             })
         except Course.DoesNotExist:
             raise serializers.ValidationError({

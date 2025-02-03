@@ -52,16 +52,8 @@ class StudentTeacherRelation(models.Model):
     teacher = models.ForeignKey(Teacher, on_delete=models.CASCADE, related_name="student_relation")
     favorite_teacher = models.BooleanField(default=False)
     favorite_student = models.BooleanField(default=False)
-    student_first_name = models.CharField(default="unknown")
-    student_last_name = models.CharField(default="unknown")
-    student_color = models.CharField(default="C5E5DB", max_length=6)
 
     def save(self, *args, **kwargs):
-        # Automatically set student names if they are still the default value
-        if self.student_first_name == "unknown":
-            self.student_first_name = self.student.user.first_name
-        if self.student_last_name == "unknown":
-            self.student_last_name = self.student.user.last_name
         super().save(*args, **kwargs)
 
 class Student(models.Model):
@@ -153,6 +145,8 @@ class Booking(models.Model):
         default='COM'
     )  # Restricted to only completed and canceled
 
+    check_in = models.TimeField(null=True, blank=True)
+    check_out = models.TimeField(null=True, blank=True)
     def __str__(self):
         if self.user_type == 'student' and self.student:
             return f"Student Booking: {self.student} - Status: {self.status}"

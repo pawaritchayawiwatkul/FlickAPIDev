@@ -344,7 +344,7 @@ class BookingViewSet(ViewSet):
             code = request.data.get("lesson_code")
             lesson = get_object_or_404(
                 Lesson.objects.select_related('course', 'teacher').filter(
-                    Q(course__is_group=True, status="CON") | Q(course__is_group=False, status="AVA"),
+                    Q(course__is_group=True, status="CON"),
                     code=code,
                 )
             )
@@ -353,7 +353,7 @@ class BookingViewSet(ViewSet):
             # Check if the lesson is a group course and validate group size
             if lesson.course.is_group and lesson.number_of_client >= lesson.course.group_size:
                 return Response({"error": "This lesson has reached the maximum number of clients."}, status=400)
-
+            
         # Prepare booking data
         data = {
             "user_type": request.data.get("user_type"),

@@ -108,7 +108,6 @@ class Lesson(models.Model):
         ('CON', 'Confirmed'),
         ('COM', 'Completed'),
         ('CAN', 'Canceled'),
-        ('AVA', 'Available'),
     ]
 
     code = models.CharField(max_length=12, unique=True)

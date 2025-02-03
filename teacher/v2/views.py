@@ -9,7 +9,6 @@ from rest_framework import status
 from datetime import timedelta
 import pytz
 from dateutil.parser import isoparse
-
 from teacher.models import Teacher, UnavailableTimeOneTime
 from teacher.v2.serializers import (
     ListCourseSerializer, CourseDetailSerializer, CreateCourseSerializer,
@@ -29,8 +28,12 @@ from internal.permissions import IsTeacher, IsManager
 gmt7 = pytz.timezone('Asia/Bangkok')
 
 class CourseViewset(ViewSet):
-    permission_classes = [IsAuthenticated, IsManager, IsTeacher]
-
+    def get_permissions(self):
+        """Apply IsManager only to the create, retrieve, and edit methods"""
+        if self.action in ["create", "retrieve", "edit"]:
+            return [IsAuthenticated(), IsTeacher(), IsManager()]
+        return [IsAuthenticated(), IsTeacher()]
+    
     def list(self, request):
         teacher_courses = Course.objects.filter(
             school_id=request.user.teacher.school_id
@@ -106,15 +109,19 @@ class StudentViewSet(ViewSet):
             user = user_serializer.save(is_teacher=False, is_admin=False)
             student = Student.objects.create(user=user)
             student.school.add(teacher.school)
-            StudentTeacherRelation.objects.create(
-                student=student,
-                teacher=teacher,
-                student_first_name=student.user.first_name,
-                student_last_name=student.user.last_name,
-            )
+            student.teacher.add(teacher)
+            student.save()
             return Response({"success": True}, status=status.HTTP_201_CREATED)
         except IntegrityError as e:
-            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            # Check the exception message for details
+            error_message = str(e)
+
+            if "core_user_email_key" in error_message:
+                return Response({"email": "This email is already in use."}, status=status.HTTP_400_BAD_REQUEST)
+            elif "core_user_phone_number" in error_message:  # Example constraint for phone number
+                return Response({"phone": "This phone number is already in use."}, status=status.HTTP_400_BAD_REQUEST)
+            else:
+                return Response({"error": "A unique constraint was violated."}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
             return Response({"error": "An unexpected error occurred."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
@@ -167,7 +174,7 @@ class RegistrationViewset(ViewSet):
         data["teacher_id"] = request.user.id
         serializer = CreateCourseRegistrationSerializer(data=data)
         if serializer.is_valid():
-            registration = serializer.save()
+            registration = serializer.create(serializer.validated_data)
             return Response({"registration_id": registration.uuid}, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -184,7 +191,6 @@ class LessonViewset(ViewSet):
         status_mapping = {
             "pending": "PENTE",
             "confirm": "CON",
-            "available": "AVA",
         }
 
         if lesson_status:

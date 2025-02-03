@@ -8,13 +8,15 @@ from school.models import School, Course  # Ensure Admin model is imported
 from teacher.models import Teacher, AvailableTime
 from manager.models import Admin
 from manager.serializers import ( 
-    CourseRegistrationSerializer, CourseSerializer, PurchaseSerializer, AvailableTimeSerializer
+    CourseRegistrationSerializer, CourseSerializer, PurchaseSerializer, AvailableTimeSerializer, LessonSerializer
 )
 from core.serializers import CreateUserSerializer, UserUpdateSerializer
 from rest_framework import status
 from django.db.utils import IntegrityError
 from internal.permissions import IsManager
 from django.db import transaction
+from django.utils.dateparse import parse_date
+
 
 class InsightViewSet(ViewSet):
     permission_classes = [IsAuthenticated, IsManager]
@@ -48,118 +50,61 @@ class InsightViewSet(ViewSet):
         # Return the response
         return Response(analysis, status=200)
     
-class CalendarViewSet(ViewSet):
+class LessonViewSet(ViewSet):
     permission_classes = [IsAuthenticated, IsManager]
 
-    def month(self, request):
-        # Get the month parameter
-        month = request.GET.get("month", None)
-        if not month:
-            return Response({"error": "Month parameter is required."}, status=400)
+    def list(self, request):
+            # Get and validate request parameters
+        start_date = request.GET.get("start_date")
+        end_date = request.GET.get("end_date")
+        lesson_statuses = request.GET.getlist("lesson_status")
 
-        try:
-            datetime.strptime(month, "%Y-%m")
-        except ValueError:
-            return Response({"error": "Invalid month format. Use 'YYYY-MM'."}, status=400)
+        # Validate date format using parse_date
+        start_date = parse_date(start_date) if start_date else None
+        end_date = parse_date(end_date) if end_date else None
 
-        # Retrieve the Admin instance for the logged-in user
-        admin = Admin.objects.filter(user_id=request.user.id).first()
-        if not admin:
+        if start_date is None and request.GET.get("start_date"):
+            return Response({"error": "Invalid start_date format. Use 'YYYY-MM-DD'."}, status=400)
+        if end_date is None and request.GET.get("end_date"):
+            return Response({"error": "Invalid end_date format. Use 'YYYY-MM-DD'."}, status=400)
+
+        # Validate lesson statuses
+        valid_statuses = {'PENTE', 'CON', 'COM', 'CAN'}
+        if lesson_statuses and not set(lesson_statuses).issubset(valid_statuses):
+            return Response({"error": f"Invalid lesson statuses. Valid statuses are {list(valid_statuses)}."}, status=400)
+
+        # Get the Admin instance for the logged-in user
+        admin = Admin.objects.filter(user_id=request.user.id).select_related("school").first()
+        if not admin or not admin.school:
             return Response({"error": "Admin not found for the current user."}, status=404)
 
-        # Prefetch data for the admin's school
-        school = School.objects.prefetch_related(
-            Prefetch(
-            "teacher",  # Prefetch all teachers
-            queryset=Teacher.objects.prefetch_related(
+        # Build filtering conditions
+        filters = {"course__school": admin.school}
+        if start_date:
+            filters["datetime__gte"] = start_date
+        if end_date:
+            filters["datetime__lte"] = end_date
+        if lesson_statuses:
+            filters["status__in"] = lesson_statuses
+
+        # Fetch lessons efficiently
+        lessons = (
+            Lesson.objects
+            .select_related("course", "teacher__user")
+            .prefetch_related(
                 Prefetch(
-                "lesson",  # Prefetch lessons related to each teacher
-                queryset=Lesson.objects.select_related("course").prefetch_related(
-                    Prefetch(
-                    "booking",  # Prefetch students related to each lesson
+                    "booking",
                     queryset=Booking.objects.select_related("student__user"),
                     to_attr="prefetched_bookings"
-                    )
-                ),
-                to_attr="prefetched_lessons",
                 )
-            ),
-            to_attr="prefetched_teachers"
             )
-        ).filter(id=admin.school_id).first()
-
-        if not school:
-            return Response({"error": "School not found."}, status=404)
-
-        # Construct response data
-        reg_lessons = []
-
-        for teacher in getattr(school, "prefetched_teachers", []):
-            for lesson in getattr(teacher, "prefetched_lessons", []):
-                start_time = lesson.datetime
-                finish_time = lesson.datetime + timedelta(minutes=lesson.course.duration)
-
-                for lesson in getattr(teacher, "prefetched_lessons", []):
-                    start_time = lesson.datetime
-                    finish_time = lesson.datetime + timedelta(minutes=lesson.course.duration)
-                    reg_lessons.append({
-                        "code": lesson.code,
-                        "start_time": start_time.isoformat(),
-                        "end_time": finish_time.isoformat(),
-                        "course_name": lesson.course.name,
-                        "course_uuid": lesson.course.uuid,
-                        "teacher_first_name": teacher.user.first_name,
-                        "teacher_last_name": teacher.user.last_name,
-                        "teacher_uuid": teacher.user.uuid,
-                        "students" : [
-                            {
-                                "student_first_name": booking.student.user.first_name,
-                                "student_last_name": booking.student.user.last_name,
-                                "student_uuid": booking.student.user.uuid,
-                                "profile_url": booking.student.user.profile_image.url if booking.student.user.profile_image else "",
-                            }                     
-                            for booking in getattr(lesson, "prefetched_bookings", [])
-                        ]
-                      })
-
-
-        return Response(reg_lessons, status=200)
-
-    def create_lesson_booking(self, request):
-        data = request.data
-        registration_uuid = data.get("registration_uuid")
-        student_uuid = data.get("student_uuid")
-        teacher_uuid = data.get("teacher_uuid")
-        start_time = data.get("start_time")
-        stop_time = data.get("stop_time")
-
-        if not all([registration_uuid, student_uuid, teacher_uuid, start_time, stop_time]):
-            return Response({"error": "All fields are required."}, status=status.HTTP_400_BAD_REQUEST)
-
-        try:
-            registration = CourseRegistration.objects.get(uuid=registration_uuid)
-            student = Student.objects.get(user__uuid=student_uuid)
-            teacher = Teacher.objects.get(user__uuid=teacher_uuid)
-        except (CourseRegistration.DoesNotExist, Student.DoesNotExist, Teacher.DoesNotExist):
-            return Response({"error": "Invalid registration, student, or teacher UUID."}, status=status.HTTP_404_NOT_FOUND)
-
-        start_datetime = datetime.fromisoformat(start_time)
-        stop_datetime = datetime.fromisoformat(stop_time)
-
-        lesson = Lesson.objects.create(
-            code=Lesson.generate_unique_code(),
-            datetime=start_datetime,
-            status='AVA',
-            course=registration.course,
-            teacher=teacher,
+            .filter(**filters)
         )
 
-        Booking.objects.create(
-            lesson=lesson,
-            student=student,
-        )
+        # Build response data
+        serialized_data = LessonSerializer(lessons, many=True).data
 
-        return Response({"message": "Lesson and booking created successfully."}, status=status.HTTP_201_CREATED)
+        return Response(serialized_data, status=200)
 
 class CourseRegistrationViewSet(ViewSet):
     permission_classes = [IsAuthenticated, IsManager]
@@ -227,14 +172,32 @@ class CourseRegistrationViewSet(ViewSet):
 
         # Get the payment status from request data
         payment_status = request.data.get('payment_status')
-        if payment_status not in ['confirm', 'waiting', 'denied']:
+        if payment_status not in ['confirm', 'denied']:
             return Response({"error": "Valid payment status is required."}, status=400)
 
-        # Update the payment status based on the input
+        # If payment status is 'confirm', teacher_uuid is required
+        if payment_status == 'confirm':
+            teacher_uuid = request.data.get('teacher_uuid')
+            if not teacher_uuid:
+                return Response({"error": "Teacher UUID is required when confirming payment."}, status=400)
+
+            # Retrieve the teacher by UUID and ensure they belong to the admin's school
+            try:
+                teacher = Teacher.objects.get(user__uuid=teacher_uuid, school=admin.school)
+            except Teacher.DoesNotExist:
+                return Response({"error": "Teacher not found or does not belong to the admin's school."}, status=404)
+
+            registration.teacher = teacher
+
+            # Check if the student is already associated with the teacher
+            if not teacher.student.filter(id=registration.student.id).exists():
+                teacher.student.add(registration.student)
+
+        # Update the payment status
         registration.payment_status = payment_status
         registration.save()
 
-        return Response({"message": "Payment status updated successfully."}, status=200)
+        return Response({"message": "Payment status and teacher updated successfully."}, status=200)
     
 class StaffViewSet(ViewSet):
     permission_classes = [IsAuthenticated, IsManager]
@@ -313,23 +276,24 @@ class StaffViewSet(ViewSet):
 
         # Retrieve the teacher by their UUID and ensure they belong to the admin's school
         try:
-            teacher = Teacher.objects.get(user__uuid=uuid, school_id=admin.school.id)
+            teacher = Teacher.objects.prefetch_related(
+                Prefetch(
+                    'student_relation',
+                    queryset=StudentTeacherRelation.objects.select_related('student__user'),
+                    to_attr='cached_student_relation'
+                )
+            ).get(user__uuid=uuid, school_id=admin.school.id)
         except Teacher.DoesNotExist:
             return Response({"error": "Teacher not found."}, status=404)
-
-        # Retrieve all students related to the teacher via the StudentTeacherRelation model
-        student_relations = StudentTeacherRelation.objects.prefetch_related(
-            Prefetch('student', queryset=Student.objects.select_related('user'))
-        ).filter(teacher=teacher)
 
         # Format the response data
         clients = [
             {
                 "uuid": relation.student.user.uuid,
-                "name": f"{relation.student_first_name} {relation.student_last_name}",
+                "name": relation.student.user.get_full_name(),
                 "phone_number": relation.student.user.phone_number,
             }
-            for relation in student_relations
+            for relation in teacher.cached_student_relation
         ]
 
         return Response({"clients": clients})
@@ -484,7 +448,6 @@ class ClientViewSet(ViewSet):
         except IntegrityError as e:
             # Check the exception message for details
             error_message = str(e)
-            print(e)
 
             if "core_user_email_key" in error_message:
                 return Response({"email": "This email is already in use."}, status=status.HTTP_400_BAD_REQUEST)
@@ -493,7 +456,6 @@ class ClientViewSet(ViewSet):
             else:
                 return Response({"error": "A unique constraint was violated."}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
-            print(e)
             return Response({"error": "An error occurred while creating the client."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
     def edit(self, request, uuid):
@@ -557,25 +519,16 @@ class ClientViewSet(ViewSet):
         return Response({"registrations": registrations})
         
     def create_registration(self, request, uuid=None):
-        # Check if the student exists
-        try:
-            student = Student.objects.get(user__uuid=uuid)
-        except Student.DoesNotExist:
-            return Response({"error": "Student with this UUID does not exist."}, status=status.HTTP_404_NOT_FOUND)
-
         # Add the student to the request data
         request_data = request.data.copy()
-        request_data['student'] = student.id  # Use the primary key for the ForeignKey relation
+        request_data['student_uuid'] = uuid  # Use the primary key for the ForeignKey relation
 
         serializer = CourseRegistrationSerializer(data=request_data)
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data, status=status.HTTP_201_CREATED)
-
+        
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-# class RegistrationViewset(ViewSet):
-#     permission_classes = [IsAuthenticated, IsManager]
 
 
 class CourseViewset(ViewSet):
@@ -694,3 +647,26 @@ class AvailableTimeViewSet(ViewSet):
         }
 
         return Response(response_data, status=status.HTTP_200_OK)
+
+class BookingViewSet(ViewSet):
+    permission_classes = [IsAuthenticated, IsManager]
+
+    def check_in(self, request, code=None):
+        try:
+            booking = Booking.objects.get(code=code)
+        except Booking.DoesNotExist:
+            return Response({"error": "Booking not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        booking.check_in = datetime.now()
+        booking.save()
+        return Response({"message": "Check-in successful."}, status=status.HTTP_200_OK)
+
+    def check_out(self, request, code=None):
+        try:
+            booking = Booking.objects.get(code=code)
+        except Booking.DoesNotExist:
+            return Response({"error": "Booking not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        booking.check_out = datetime.now()
+        booking.save()
+        return Response({"message": "Check-out successful."}, status=status.HTTP_200_OK)

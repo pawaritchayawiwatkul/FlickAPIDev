@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from student.models import CourseRegistration
 from rest_framework import serializers
-from student.models import  CourseRegistration, Student
+from student.models import  CourseRegistration, Student, Booking
 from teacher.models import Teacher, Lesson, AvailableTime
 from school.models import Course, School
 from dateutil.relativedelta import relativedelta
@@ -10,6 +10,7 @@ from datetime import date, timedelta
 class CourseRegistrationSerializer(serializers.ModelSerializer):
     teacher_uuid = serializers.UUIDField(write_only=True, required=True)
     course_uuid = serializers.UUIDField(write_only=True, required=True)  # Added course_uuid
+    student_uuid = serializers.UUIDField(write_only=True, required=True)
     discount = serializers.FloatField()
     payment_slip = serializers.ImageField(required=False)  # Add payment_slip field
     number_of_lessons = serializers.IntegerField(required=False)  # Add number_of_lessons field
@@ -18,8 +19,8 @@ class CourseRegistrationSerializer(serializers.ModelSerializer):
         model = CourseRegistration
         fields = [
             'discount', 
-            'student',
             'teacher_uuid', 
+            'student_uuid', 
             'course_uuid',  # Include course_uuid
             'registered_date',
             'exp_date',
@@ -33,11 +34,18 @@ class CourseRegistrationSerializer(serializers.ModelSerializer):
     def validate(self, data):
         # Validate teacher existence
         teacher_uuid = data.pop('teacher_uuid')
+        student_uuid = data.pop('student_uuid')
         try:
             teacher = Teacher.objects.get(user__uuid=teacher_uuid)
         except Teacher.DoesNotExist:
             raise serializers.ValidationError({"teacher_uuid": "Teacher with this UUID does not exist."})
+        try:
+            student = Student.objects.get(user__uuid=student_uuid)
+        except Student.DoesNotExist:
+            return serializers.ValidationError({"student_uuid": "Student with this UUID does not exist."})
+
         data['teacher'] = teacher
+        data['student'] = student
 
         # Set EXP Date
         data['registered_date'] = date.today()
@@ -67,12 +75,15 @@ class CourseRegistrationSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         # Pop fields not part of the CourseRegistration model
         teacher = validated_data.pop('teacher')
-        course = validated_data.pop('course')
+        student = validated_data.pop('student')
+
+        if not teacher.student.filter(id=student.id).exists():
+            teacher.student.add(student)
 
         # Create the CourseRegistration instance
         registration = CourseRegistration.objects.create(
             teacher=teacher,
-            course=course,
+            student=student,
             **validated_data  # Add remaining fields dynamically
         )
         return registration
@@ -178,41 +189,29 @@ class SchoolAnalyticsSerializer(serializers.ModelSerializer):
     def get_earnings_amount(self, obj):
         return self.context.get('total_earnings', 0)
 
-class LessonSerializer(serializers.ModelSerializer):
-    start_time = serializers.DateTimeField(source='booked_datetime')
-    end_time = serializers.SerializerMethodField()
-    course_name = serializers.CharField(source='registration.course.name')
-    course_uuid = serializers.UUIDField(source='registration.course.uuid')
-    student_first_name = serializers.CharField(source='registration.student.user.first_name')
-    student_last_name = serializers.CharField(source='registration.student.user.last_name')
-    student_uuid = serializers.UUIDField(source='registration.student.user.uuid')
-    teacher_first_name = serializers.CharField(source='registration.teacher.user.first_name')
-    teacher_last_name = serializers.CharField(source='registration.teacher.user.last_name')
-    teacher_uuid = serializers.UUIDField(source='registration.teacher.user.uuid')
-
-    class Meta:
-        model = Lesson
-        fields = ['code', 'start_time', 'end_time', 'course_name', 'course_uuid', 'student_first_name', 'student_last_name', 'student_uuid', 'teacher_first_name', 'teacher_last_name', 'teacher_uuid']
-
-    def get_end_time(self, obj):
-        return obj.booked_datetime + timedelta(minutes=obj.registration.course.duration)
-
 
 class PurchaseSerializer(serializers.ModelSerializer):
-    student_first_name = serializers.CharField(source='student.user.first_name')
-    student_last_name = serializers.CharField(source='student.user.last_name')
-    student_uuid = serializers.UUIDField(source='student.user.uuid')
+    student_name = serializers.CharField(source='student.user.get_full_name', read_only=True)
+    teacher_name = serializers.CharField(source='teacher.user.get_full_name', read_only=True)
     course_name = serializers.CharField(source='course.name')
-    course_uuid = serializers.UUIDField(source='course.uuid')
     amount = serializers.SerializerMethodField()
 
     class Meta:
         model = CourseRegistration
-        fields = ['uuid', 'student_first_name', 'student_last_name', 'student_uuid', 'registered_date', 'course_name', 'course_uuid', 'amount', 'payment_slip', 'payment_status', 'lessons_left']
+        fields = [
+            'uuid', 
+            'student_name', 
+            'teacher_name', 
+            'registered_date', 
+            'course_name',  
+            'amount', 
+            'payment_slip', 
+            'payment_status', 
+            'lessons_left'
+        ]
 
     def get_amount(self, obj):
         return f"${obj.paid_price:.2f}" if obj.paid_price else 0.0
-
 
 class TeacherSerializer(serializers.ModelSerializer):
     profile_picture = serializers.SerializerMethodField()
@@ -246,3 +245,30 @@ class AvailableTimeSerializer(serializers.ModelSerializer):
     class Meta:
         model = AvailableTime
         fields = ['uuid', 'day', 'start', 'stop']
+
+class BookingSerializer(serializers.ModelSerializer):
+    student_name = serializers.CharField(source="student.user.get_full_name")
+
+    class Meta:
+        model = Booking
+        fields = ["student_name", "code",  "check_in", "check_out"]
+
+
+class LessonSerializer(serializers.ModelSerializer):
+    course_name = serializers.CharField(source="course.name")
+    course_uuid = serializers.UUIDField(source="course.uuid")
+    teacher_name = serializers.CharField(source="teacher.user.get_full_name", allow_null=True)
+    start_time = serializers.DateTimeField(source="datetime")
+    end_time = serializers.SerializerMethodField()
+    bookings = BookingSerializer(source="prefetched_bookings", many=True)
+    
+    class Meta:
+        model = Lesson
+        fields = [
+            "code", "start_time", "end_time", "course_name", "course_uuid",
+            "teacher_name", "bookings"
+        ]
+
+    def get_end_time(self, obj):
+        """Calculate the lesson end time based on duration."""
+        return obj.datetime + timedelta(minutes=obj.course.duration)
