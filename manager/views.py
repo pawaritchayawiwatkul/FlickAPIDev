@@ -125,6 +125,42 @@ class CalendarViewSet(ViewSet):
 
         return Response(reg_lessons, status=200)
 
+    def create_lesson_booking(self, request):
+        data = request.data
+        registration_uuid = data.get("registration_uuid")
+        student_uuid = data.get("student_uuid")
+        teacher_uuid = data.get("teacher_uuid")
+        start_time = data.get("start_time")
+        stop_time = data.get("stop_time")
+
+        if not all([registration_uuid, student_uuid, teacher_uuid, start_time, stop_time]):
+            return Response({"error": "All fields are required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            registration = CourseRegistration.objects.get(uuid=registration_uuid)
+            student = Student.objects.get(user__uuid=student_uuid)
+            teacher = Teacher.objects.get(user__uuid=teacher_uuid)
+        except (CourseRegistration.DoesNotExist, Student.DoesNotExist, Teacher.DoesNotExist):
+            return Response({"error": "Invalid registration, student, or teacher UUID."}, status=status.HTTP_404_NOT_FOUND)
+
+        start_datetime = datetime.fromisoformat(start_time)
+        stop_datetime = datetime.fromisoformat(stop_time)
+
+        lesson = Lesson.objects.create(
+            code=Lesson.generate_unique_code(),
+            datetime=start_datetime,
+            status='AVA',
+            course=registration.course,
+            teacher=teacher,
+        )
+
+        Booking.objects.create(
+            lesson=lesson,
+            student=student,
+        )
+
+        return Response({"message": "Lesson and booking created successfully."}, status=status.HTTP_201_CREATED)
+
 class CourseRegistrationViewSet(ViewSet):
     permission_classes = [IsAuthenticated, IsManager]
 
@@ -265,7 +301,6 @@ class StaffViewSet(ViewSet):
             "last_name": user.last_name,  # Full name
             "email": user.email,
             "phone_number": user.phone_number,
-            "available_times": teacher.available_times  # Include available times
         }
 
         return Response({"teacher": teacher_details})
@@ -631,7 +666,8 @@ class AvailableTimeViewSet(ViewSet):
         # **Handle Bulk Deletions**
         if delete_uuids:
             deleted_count, _ = AvailableTime.objects.filter(uuid__in=delete_uuids, teacher__school=admin.school, teacher__user__uuid=teacher_uuid).delete()
-
+        else:
+            deleted_count = 0
         # **Handle Bulk Creations**
         if create_data:
             if not teacher_uuid:

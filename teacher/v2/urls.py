@@ -15,7 +15,7 @@ app_name = 'teacher'
 urlpatterns = [
     # Course endpoints
     path('courses/', CourseViewset.as_view({'get': 'list', 'post': 'create'}), name='course-list-create'),
-    path('courses/<uuid:uuid>/', CourseViewset.as_view({'get': 'retrieve', 'delete': 'remove', 'put': 'edit'}), name='course-detail'),
+    path('courses/<uuid:uuid>', CourseViewset.as_view({'get': 'retrieve', 'put': 'edit'}), name='course-detail'),
 
     # Profile endpoints
     path('profile/', ProfileViewSet.as_view({'get': 'retrieve', 'put': 'update', 'delete': 'destroy'}), name='profile'),

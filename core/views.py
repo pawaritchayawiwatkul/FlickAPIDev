@@ -34,7 +34,7 @@ def check_usertype(request, type):
     if type == 'teacher':
         filters = {'is_teacher': True}
     elif type == 'student':
-        filters = {'is_teacher': False}
+        filters = {'is_teacher': False, 'is_manager': False}
     else:
         return Response({'error': 'Invalid user type'}, status=400)
     
@@ -43,7 +43,6 @@ def check_usertype(request, type):
         return Response({'error': 'Phone number is required'}, status=400)
 
     filters['phone_number'] = phone_number
-    filters['is_manager'] = False
     try:
         user = User.objects.get(**filters)  # Assuming phone_number is a field in the User model
     except User.DoesNotExist:

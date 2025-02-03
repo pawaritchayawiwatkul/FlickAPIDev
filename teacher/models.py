@@ -6,7 +6,7 @@ import string
 from utils.schedule_utils import compute_available_time
 import uuid
 from django.core.exceptions import ValidationError
-from datetime import datetime
+from datetime import datetime, timedelta
 # Create your models here.
 
     
@@ -137,26 +137,16 @@ class Lesson(models.Model):
             code = self.generate_unique_code(length)
         return code
 
-    def remove_conflicting_lessons(self):
-        """Remove lessons that conflict with this lesson's time if course.is_course is False."""
-        if not self.course.is_group:
-            conflicting_lessons = Lesson.objects.filter(
-                teacher=self.teacher,
-                datetime__lt=self.datetime + self.course.duration,
-                datetime__gt=self.datetime,
-                status__in=['PENTE', 'AVA']  # Only remove pending and available lessons
-            )
-            conflicting_lessons.delete()
-
     def check_for_conflicts(self):
         """Check for conflicting lessons when status is changed to 'CON'."""
         if not self.course.is_group:
             conflicting_lessons = Lesson.objects.filter(
                 teacher=self.teacher,
-                datetime__lt=self.datetime + self.course.duration,
-                datetime__gt=self.datetime,
-                status='CON'
+                datetime__lt=self.datetime + timedelta(minutes=self.course.duration),  # Use minutes if duration is in minutes
+                datetime__gte=self.datetime,
+                status__in=['CON', 'PENTE']
             )
+            print("conflicting_lessons", conflicting_lessons)  
             if conflicting_lessons.exists():
                 raise ValidationError("There is a conflicting lesson during this time.")
 
@@ -167,20 +157,14 @@ class Lesson(models.Model):
 
             # Check if the status is changing to 'CON'
             if self.pk is None:
-                status_changed_to_confirm = True
+                status_changed_to_pending = True
             elif self.status != 'CON':
-                status_changed_to_confirm = False
+                status_changed_to_pending = False
             else:
                 previous_status = Lesson.objects.get(pk=self.pk).status
-                status_changed_to_confirm = self.status == 'CON' and previous_status != 'CON'
+                status_changed_to_pending = self.status == 'CON' and previous_status != 'CON'
 
-            if status_changed_to_confirm:
+            if status_changed_to_pending:
                 self.check_for_conflicts()  # Check for conflicts before saving
-
-            super(Lesson, self).save(*args, **kwargs)
-
-            # Check if the lesson's course requires rescheduling and status changed to 'CON'
-            if not self.course.is_group and status_changed_to_confirm:
-                self.remove_conflicting_lessons()  # Step 1: Remove conflicts
-                # self.regenerate_available_lessons()  # Step 2: Regenerate available slots
                 
+            super(Lesson, self).save(*args, **kwargs)

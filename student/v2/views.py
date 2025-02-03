@@ -2,12 +2,11 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.viewsets import ViewSet
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
-from rest_framework.exceptions import ValidationError
 from django.shortcuts import get_object_or_404
-from django.db.models import Q, F
+from django.db.models import Q, F, Prefetch
 from functools import reduce
 from operator import or_
-
+from manager.tasks import generate_upcoming_private
 from student.models import CourseRegistration, Student, StudentTeacherRelation, Booking
 from teacher.models import Teacher, Lesson
 from school.models import Course
@@ -23,12 +22,15 @@ from student.v2.serializers import (
     ListLessonPrivateSerializer,
     BookingDetailSerializer
 )
+from django.core.exceptions import ValidationError
 from school.models import School
 from core.serializers import ProfileSerializer
 from internal.permissions import IsStudent
 from uuid import UUID
-from datetime import datetime
+from datetime import datetime, timedelta
 import pytz
+from django.utils import timezone
+from datetime import timedelta
 
 gmt7 = pytz.timezone('Asia/Bangkok')
 
@@ -163,9 +165,6 @@ class CourseViewSet(ViewSet):
         return Response(ser.data, status=200)
 
 
-from django.utils import timezone
-from datetime import timedelta
-
 class LessonViewSet(ViewSet):
     """
     ViewSet to manage lessons and their bookings.
@@ -177,49 +176,34 @@ class LessonViewSet(ViewSet):
         student = request.user.student
 
         # Fetch the month and year from query parameters
-        month = request.query_params.get("month")
-        year = request.query_params.get("year")
+        start_date = request.query_params.get("start_date")
+        end_date = request.query_params.get("end_date")
         filters = {}
-        if month and year:
+        if start_date and end_date:
             try:
-                month = int(month)
-                year = int(year)
-                start_date = timezone.datetime(year, month, 1, tzinfo=timezone.utc)
-                end_date = (start_date + timedelta(days=32)).replace(day=1)
+                start_date = timezone.datetime.fromisoformat(start_date).replace(tzinfo=timezone.utc)
+                end_date = timezone.datetime.fromisoformat(end_date).replace(tzinfo=timezone.utc)
                 filters["datetime__range"] = (start_date, end_date)
             except ValueError:
-                return Response({"error": "Invalid month or year"}, status=400)
+                return Response({"error": "Invalid start_date or end_date"}, status=400)
 
         # Fetch confirmed course registrations with their courses and teachers
-        registered_courses = CourseRegistration.objects.filter(
+        registered_courses = CourseRegistration.objects.select_related("course").prefetch_related(
+             Prefetch('teacher', 
+                queryset=Teacher.objects.prefetch_related(
+                Prefetch('unavailable_once', to_attr='cached_unavailables'),
+                Prefetch('lesson', queryset=Lesson.objects.filter(status__in=["CON", "CAN", "PENTE"]),to_attr='cached_lessons'),
+                Prefetch('course',
+                    queryset=Course.objects.filter(is_group=False), to_attr='cached_courses'),
+                Prefetch('available_time', to_attr='cached_available_times'),  # Prefetch available times
+            ), to_attr='cached_teacher'),
+        ).filter(
             student=student, payment_status="confirm", course__is_group=False
         )
 
-        # Collect valid course and teacher pairs
-        course_teacher_pairs = registered_courses.values_list("course_id", "teacher_id")
-
-        # Create a list of Q objects for OR filtering
-        conditions = [Q(course_id=course, teacher_id=teacher) for course, teacher in course_teacher_pairs]
-        if not conditions:
-            return Response([], status=200)
-
-        # Combine all Q objects with OR using reduce
-        combined_conditions = reduce(or_, conditions)
-
-        # Filter lessons that match the combined conditions and the specified date range
-        lessons = Lesson.objects.filter(
-            combined_conditions,
-            course__is_group=False,
-            status="AVA",
-            **filters,
-            datetime__gte=datetime.now()  # Ensure lessons are before or on today's date
-        ).select_related(
-            "course__school", "teacher__user"
-        )
-
         # Serialize and return the lessons
-        ser = ListLessonPrivateSerializer(instance=lessons, many=True)
-        return Response(ser.data, status=200)
+        lessons = generate_upcoming_private(student.school.first(), registered_courses)
+        return Response(lessons, status=200)
 
 
     def list_course(self, request):
@@ -317,50 +301,58 @@ class BookingViewSet(ViewSet):
         ser = BookingDetailSerializer(instance=booking)
         return Response(ser.data, status=200)
 
-    def create(self, request, code):
-        student = request.user.student
-
-        # Fetch the lesson using the provided code and conditions
-        lesson = get_object_or_404(
-            Lesson.objects.select_related('course', 'teacher').filter(
-                Q(course__is_group=True, status="CON") | Q(course__is_group=False, status="AVA"),
-                code=code
-            )
+    def create(self, request):
+        registration_uuid = request.data.get("registration_uuid")
+        if not registration_uuid:
+            return Response({"error": "Registration UUID is required."}, status=400)
+        user_id = request.user.id
+        registration = get_object_or_404(
+            CourseRegistration,
+            uuid=registration_uuid,
+            student__user_id=user_id,
+            payment_status="confirm",
         )
 
-        # Check if the lesson is a group course and validate group size
-        if lesson.course.is_group and lesson.number_of_client >= lesson.course.group_size:
-            return Response({"error": "This lesson has reached the maximum number of clients."}, status=400)
-        
+        # Fetch lesson data from request body
+        lesson_data = request.data.get("lesson")
+        if not lesson_data:
+            return Response({"error": "Lesson data is required."}, status=400)
 
-        # Fetch course registration based on the provided UUIDs
-        filter_conditions = {
-            "course_id": lesson.course.id,
-            "student": student,
-            "payment_status": "confirm",
-        }
+        # If the course is not a group course, create a new lesson
+        if not registration.course.is_group:
+            # Validate datetime
+            try:
+                booking_datetime = lesson_data.get("datetime")
+                lesson_datetime = timezone.datetime.fromisoformat(booking_datetime
+                )
+            except (TypeError, ValueError):
+                return Response({"error": "Invalid datetime format."}, status=400)
 
-        # If the course is not a group course, add the specific teacher condition
-        if not lesson.course.is_group:
-            filter_conditions["teacher_id"] = lesson.teacher.id
-
-        # Fetch the first matching course registration
-        registration = CourseRegistration.objects.filter(**filter_conditions).first()
-
-        # Check if a valid registration exists
-        if not registration:
-            return Response({"error": "No course registration found for the provided instructor and course."}, status=404)
-
-
-        # Validate if the registration course matches the lesson course
-        if registration.course_id != lesson.course_id:
-            return Response({"error": "The registration course couldn't be used for this course."}, status=400)
-
-        # Validate teacher match only for private courses
-        if not lesson.course.is_group and registration.teacher_id != lesson.teacher_id:
-            return Response({"error": "The registration course couldn't be used for this course."}, status=400)
-
-        # Determine the booking status based on whether the course is a group class
+            try:
+                lesson = Lesson.objects.create(
+                    code=Lesson()._generate_unique_code(12),
+                    datetime=lesson_datetime,
+                    status="PENTE",
+                    course=registration.course,
+                    teacher=registration.teacher,
+                    number_of_client=1,
+                )
+            except ValidationError as e:
+                return Response({"error": str(e)}, status=400)
+        else:
+            # Fetch the lesson using the provided code and conditions
+            code = request.data.get("lesson_code")
+            lesson = get_object_or_404(
+                Lesson.objects.select_related('course', 'teacher').filter(
+                    Q(course__is_group=True, status="CON") | Q(course__is_group=False, status="AVA"),
+                    code=code,
+                )
+            )
+            if registration.course_id != lesson.course_id:
+                return Response({"error": "The registration course couldn't be used for this course."}, status=400)
+            # Check if the lesson is a group course and validate group size
+            if lesson.course.is_group and lesson.number_of_client >= lesson.course.group_size:
+                return Response({"error": "This lesson has reached the maximum number of clients."}, status=400)
 
         # Prepare booking data
         data = {
@@ -374,8 +366,9 @@ class BookingViewSet(ViewSet):
         ser = CreateBookingSerializer(data=data)
         if ser.is_valid():
             ser.save(lesson=lesson)
-            lesson.number_of_client += 1  # Update client count only for group courses
-            lesson.status = "CON" if lesson.course.is_group else "PENTE"
+            if lesson.course.is_group:
+                lesson.number_of_client += 1  # Update client count only for group courses
+                lesson.status = "CON"
             lesson.save()
             return Response({"message": "Booking created successfully."}, status=201)
 

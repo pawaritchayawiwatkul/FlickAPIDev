@@ -79,57 +79,94 @@ class CourseRegistrationSerializer(serializers.ModelSerializer):
     
 
 class CourseSerializer(serializers.ModelSerializer):
+    name = serializers.CharField(max_length=100)
+    description = serializers.CharField(max_length=300, required=False)
+    no_exp = serializers.BooleanField(default=True)
+    exp_range = serializers.IntegerField(required=False)
+    duration = serializers.IntegerField()
+    number_of_lessons = serializers.IntegerField()
+    is_group = serializers.BooleanField(default=False)
+    image = serializers.FileField(required=True)
+    
     class Meta:
         model = Course
-        fields = [
+        fields = (
             'name', 
             'description', 
-            'uuid', 
             'no_exp', 
             'exp_range', 
             'duration', 
             'number_of_lessons', 
-            'created_date',
-            'school',
-            'price',
             'is_group',
-            'group_size'
-        ]
-        read_only_fields = ['uuid']
-        extra_kwargs = {
-            'school': {'required': True, 'write_only': True},
-        }
-
-    def validate(self, data):
-        # Ensure the 'exp_range' is a positive integer
-        if data.get('exp_range') <= 0:
-            raise serializers.ValidationError({"exp_range": "This field must be a positive integer."})
-        
-        # Validate 'duration' to be a positive integer
-        if data.get('duration') <= 0:
-            raise serializers.ValidationError({"duration": "This field must be a positive integer."})
-        
-        # Validate 'number_of_lessons' to be a positive integer
-        if data.get('number_of_lessons') <= 0:
-            raise serializers.ValidationError({"number_of_lessons": "This field must be a positive integer."})
-        
-        return data
+            'image',
+            'school'
+        )
 
     def create(self, validated_data):
-        # Create the Course instance using validated data
-        course = Course.objects.create(
-            name=validated_data['name'],
-            description=validated_data['description'],
-            no_exp=validated_data['no_exp'],
-            exp_range=validated_data['exp_range'],
-            duration=validated_data['duration'],
-            number_of_lessons=validated_data['number_of_lessons'],
-            school=validated_data['school'],
-            price=validated_data['price'],
-            is_group=validated_data.get('is_group', False),
-            group_size=validated_data.get('group_size', None) if validated_data.get('is_group', False) else None
-        )
+        course = Course.objects.create(**validated_data)
         return course
+
+    def validate(self, attrs):
+        no_exp = attrs.get('no_exp')
+        exp_range = attrs.get('exp_range')
+        if not no_exp and not exp_range:
+            raise serializers.ValidationError({
+                'exp_range': 'This field is required when no_exp is False.'
+            })
+        return attrs
+    
+# class CourseSerializer(serializers.ModelSerializer):
+#     class Meta:
+#         model = Course
+#         fields = [
+#             'name', 
+#             'description', 
+#             'uuid', 
+#             'no_exp', 
+#             'exp_range', 
+#             'duration', 
+#             'number_of_lessons', 
+#             'created_date',
+#             'school',
+#             'price',
+#             'is_group',
+#             'group_size'
+#         ]
+#         read_only_fields = ['uuid']
+#         extra_kwargs = {
+#             'school': {'required': True, 'write_only': True},
+#         }
+
+#     def validate(self, data):
+#         # Ensure the 'exp_range' is a positive integer
+#         if data.get('exp_range') <= 0:
+#             raise serializers.ValidationError({"exp_range": "This field must be a positive integer."})
+        
+#         # Validate 'duration' to be a positive integer
+#         if data.get('duration') <= 0:
+#             raise serializers.ValidationError({"duration": "This field must be a positive integer."})
+        
+#         # Validate 'number_of_lessons' to be a positive integer
+#         if data.get('number_of_lessons') <= 0:
+#             raise serializers.ValidationError({"number_of_lessons": "This field must be a positive integer."})
+        
+#         return data
+
+#     def create(self, validated_data):
+#         # Create the Course instance using validated data
+#         course = Course.objects.create(
+#             name=validated_data['name'],
+#             description=validated_data['description'],
+#             no_exp=validated_data['no_exp'],
+#             exp_range=validated_data['exp_range'],
+#             duration=validated_data['duration'],
+#             number_of_lessons=validated_data['number_of_lessons'],
+#             school=validated_data['school'],
+#             price=validated_data['price'],
+#             is_group=validated_data.get('is_group', False),
+#             group_size=validated_data.get('group_size', None) if validated_data.get('is_group', False) else None
+#         )
+#         return course
 
 class SchoolAnalyticsSerializer(serializers.ModelSerializer):
     earnings_amount = serializers.SerializerMethodField()
@@ -168,7 +205,6 @@ class PurchaseSerializer(serializers.ModelSerializer):
     course_name = serializers.CharField(source='course.name')
     course_uuid = serializers.UUIDField(source='course.uuid')
     amount = serializers.SerializerMethodField()
-    payment_slip = serializers.SerializerMethodField()
 
     class Meta:
         model = CourseRegistration
@@ -177,8 +213,6 @@ class PurchaseSerializer(serializers.ModelSerializer):
     def get_amount(self, obj):
         return f"${obj.paid_price:.2f}" if obj.paid_price else 0.0
 
-    def get_payment_slip(self, obj):
-        return obj.payment_slip.url if obj.payment_slip else ""
 
 class TeacherSerializer(serializers.ModelSerializer):
     profile_picture = serializers.SerializerMethodField()

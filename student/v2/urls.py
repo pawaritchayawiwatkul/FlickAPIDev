@@ -33,6 +33,5 @@ urlpatterns = [
     path("lessons/list-course", LessonViewSet.as_view({"get": "list_course"}), name="lesson-list"),
 
     # Booking routes
-    path("bookings/", BookingViewSet.as_view({"get": "list"}), name="booking-list"),
-    path("bookings/<str:code>", BookingViewSet.as_view({ "post": "create"}), name="booking-create"),
+    path("bookings", BookingViewSet.as_view({"get": "list", "post": "create"}), name="booking-list"),
 ]

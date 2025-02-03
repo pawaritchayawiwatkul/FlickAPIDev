@@ -12,6 +12,10 @@ calendarViewSet = views.CalendarViewSet.as_view({
     'get': "month"
 })
 
+calendarCreateLessonBookingViewSet = views.CalendarViewSet.as_view({
+    'post': 'create_lesson_booking'
+})
+
 registrationViewSet = views.CourseRegistrationViewSet.as_view({
     'get': "list"
 })
@@ -67,6 +71,7 @@ urlpatterns = format_suffix_patterns([
     path('insight', insightViewSet, name='insight'),
 
     path('calendar/month', calendarViewSet, name='profile-add'),
+    path('calendar/create-lesson-booking', calendarCreateLessonBookingViewSet, name='create-lesson-booking'),
     path('purchase', registrationViewSet, name='purchase'),
     path('purchase/<slug:uuid>/payment-validation', paymentViewset, name='purchase'),
 
