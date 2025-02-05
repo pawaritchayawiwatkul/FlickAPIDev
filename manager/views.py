@@ -8,7 +8,12 @@ from school.models import School, Course  # Ensure Admin model is imported
 from teacher.models import Teacher, AvailableTime
 from manager.models import Admin
 from manager.serializers import ( 
-    CourseRegistrationSerializer, CourseSerializer, PurchaseSerializer, AvailableTimeSerializer, LessonSerializer
+    CourseRegistrationSerializer, 
+    CourseSerializer, 
+    PurchaseSerializer, 
+    AvailableTimeSerializer, 
+    LessonSerializer,
+    ProfileSerializer  # Add this import
 )
 from core.serializers import CreateUserSerializer, UserUpdateSerializer
 from rest_framework import status
@@ -100,6 +105,7 @@ class LessonViewSet(ViewSet):
             )
             .filter(**filters)
         )
+        print(lessons)
 
         # Build response data
         serialized_data = LessonSerializer(lessons, many=True).data
@@ -118,38 +124,26 @@ class CourseRegistrationViewSet(ViewSet):
         # Prefetch data for the admin's school, including registration and related student/course data
         school = School.objects.prefetch_related(
             Prefetch(
-                'teacher__registration',  # Prefetch student for each registration
-                queryset=CourseRegistration.objects.prefetch_related('course', 'student')
-            ),
-        ).filter(id=admin.school.id).first()
-
-        if not school:
-            return Response({"error": "School not found."}, status=404)
-
-        # Prefetch data for the admin's school, including registration and related student/course data
-        # Prefetch teachers with their registrations and store them in `prefetched_teachers`
-        school = School.objects.prefetch_related(
-            Prefetch(
-                "teacher",  # Prefetch all teachers related to the school
-                queryset=Teacher.objects.prefetch_related(
+                "course",  # Prefetch all courses related to the school
+                queryset=Course.objects.prefetch_related(
                     Prefetch(
-                        "registration",  # Prefetch registrations related to each teacher
-                        queryset=CourseRegistration.objects.select_related("course", "student__user"),
+                        "registration",  # Prefetch registrations related to each course
+                        queryset=CourseRegistration.objects.select_related("student__user"),
                         to_attr="prefetched_registrations",  # Store prefetched registrations in this attribute
                     )
                 ),
-                to_attr="prefetched_teachers"  # Store prefetched teachers in this attribute
+                to_attr="prefetched_courses"  # Store prefetched courses in this attribute
             )
         ).filter(id=admin.school.id).first()
 
         if not school:
             return Response({"error": "School not found."}, status=404)
 
-        # Collect registrations from the prefetched teachers
+        # Collect registrations from the prefetched courses
         purchases = [
             registration
-            for teacher in getattr(school, "prefetched_teachers", [])
-            for registration in getattr(teacher, "prefetched_registrations", [])
+            for course in getattr(school, "prefetched_courses", [])
+            for registration in getattr(course, "prefetched_registrations", [])
         ]
 
         # Serialize the data using the optimized serializer
@@ -216,9 +210,9 @@ class StaffViewSet(ViewSet):
         # Prefetch teachers and their user data for the school
         school = School.objects.prefetch_related(
             Prefetch(
-            'teacher',
-            queryset=Teacher.objects.select_related('user'),
-            to_attr='cached_teachers'
+                'teacher',
+                queryset=Teacher.objects.select_related('user'),
+                to_attr='cached_teachers'
             )
         ).filter(id=school.id).first()
 
@@ -228,14 +222,13 @@ class StaffViewSet(ViewSet):
         # Format the response data for employees
         employees = [
             {
-            "profile_picture": teacher.user.profile_image.url if teacher.user.profile_image else "",
-            "first_name": teacher.user.first_name,
-            "last_name": teacher.user.last_name,
-            "uuid": teacher.user.uuid,
-            "phone_number": teacher.user.phone_number,
-            "email": teacher.user.email,
-            }
-            for teacher in school.cached_teachers
+                "profile_picture": teacher.user.profile_image.url if teacher.user.profile_image else "",
+                "first_name": teacher.user.first_name,
+                "last_name": teacher.user.last_name,
+                "uuid": teacher.user.uuid,
+                "phone_number": teacher.user.phone_number,
+                "email": teacher.user.email,
+            } for teacher in school.cached_teachers
         ]
 
         return Response({"employees": employees})
@@ -315,9 +308,23 @@ class StaffViewSet(ViewSet):
         
         if serializer.is_valid():
             serializer.save()  # Save the updated data
+            
+            # Handle the is_manager field
+            is_manager = request.data.get('is_manager', None)
+            if is_manager is not None:
+                teacher.user.is_manager = is_manager
+                teacher.user.save()
+                
+                if is_manager:
+                    # Create Admin instance if it doesn't exist
+                    Admin.objects.get_or_create(user=teacher.user, school=admin.school)
+                else:
+                    # Remove Admin instance if it exists
+                    Admin.objects.filter(user=teacher.user).delete()
+            
             return Response({"message": "User info updated successfully."}, status=status.HTTP_200_OK)
         
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)    
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
     def create(self, request):
         # Retrieve the Admin instance for the logged-in user
@@ -338,9 +345,17 @@ class StaffViewSet(ViewSet):
         try:
             # Create the User instance
             user = user_serializer.save(is_teacher=True)
+            is_manager = request.data.get('is_manager', False)
+            user.is_manager = is_manager
+            user.save()
+            
             # Create the Teacher instance and associate with the School
             teacher = Teacher.objects.create(user=user, school=admin.school)
             available_time_serializer.save(teacher=teacher)
+            
+            # If the user is a manager, create an Admin instance
+            if is_manager:
+                Admin.objects.create(user=user, school=admin.school)
             
             return Response(user_serializer.data, status=status.HTTP_201_CREATED)
         except IntegrityError as e:
@@ -663,10 +678,45 @@ class BookingViewSet(ViewSet):
 
     def check_out(self, request, code=None):
         try:
-            booking = Booking.objects.get(code=code)
+            booking = Booking.objects.select_related("registration").get(code=code)
         except Booking.DoesNotExist:
             return Response({"error": "Booking not found."}, status=status.HTTP_404_NOT_FOUND)
 
+        if not booking.check_in:
+            return Response({"error": "Check-in is required before check-out."}, status=status.HTTP_400_BAD_REQUEST)
+
         booking.check_out = datetime.now()
         booking.save()
+        booking.registration.lessons_left -= 1
+        booking.registration.save()
         return Response({"message": "Check-out successful."}, status=status.HTTP_200_OK)
+
+class ProfileViewSet(ViewSet):
+    permission_classes = [IsAuthenticated, IsManager]
+
+    def retrieve(self, request):
+        admin = Admin.objects.filter(user_id=request.user.id).first()
+        if not admin:
+            return Response({"error": "Admin not found for the current user."}, status=404)
+        
+        serializer = ProfileSerializer(instance=request.user)
+        return Response(serializer.data)
+
+    def update(self, request):
+        admin = Admin.objects.filter(user_id=request.user.id).first()
+        if not admin:
+            return Response({"error": "Admin not found for the current user."}, status=404)
+        
+        serializer = ProfileSerializer(instance=request.user, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def destroy(self, request):
+        admin = Admin.objects.filter(user_id=request.user.id).first()
+        if not admin:
+            return Response({"error": "Admin not found for the current user."}, status=404)
+        
+        request.user.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)

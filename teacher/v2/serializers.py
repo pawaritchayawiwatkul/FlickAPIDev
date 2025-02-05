@@ -28,7 +28,6 @@ class CourseDetailSerializer(serializers.ModelSerializer):
     exp_range = serializers.IntegerField(required=False)
     lesson_duration = serializers.IntegerField(source='duration', required=False)
     number_of_lessons = serializers.IntegerField(required=False)
-    course_image_url = serializers.FileField(source='image', required=False)
     location = serializers.CharField(source="school.location", read_only=True)
 
     class Meta:
@@ -38,7 +37,7 @@ class CourseDetailSerializer(serializers.ModelSerializer):
             "course_name", 
             "course_description", 
             "course_price", 
-            "course_image_url",
+            "image",
             "exp_range", 
             "lesson_duration", 
             "number_of_lessons",
@@ -53,11 +52,6 @@ class CourseDetailSerializer(serializers.ModelSerializer):
     def validate_exp_range(self, value):
         if value is not None and value < 0:
             raise serializers.ValidationError("Experience range must be a positive integer.")
-        return value
-
-    def validate_course_image_url(self, value):
-        if value and not value.name.endswith(('.png', '.jpeg', '.jpg')):
-            raise serializers.ValidationError("Only PNG and JPEG files are allowed for the payment slip.")
         return value
 
     def update(self, instance, validated_data):
@@ -88,7 +82,8 @@ class CreateCourseSerializer(serializers.ModelSerializer):
     user_id = serializers.IntegerField(write_only=True)
     is_group = serializers.BooleanField(default=False)
     image = serializers.FileField(required=True)
-    
+    price = serializers.FloatField(required=True)
+
     class Meta:
         model = Course
         fields = (
@@ -100,7 +95,8 @@ class CreateCourseSerializer(serializers.ModelSerializer):
             'number_of_lessons', 
             'user_id', 
             'is_group',
-            'image'
+            'image',
+            'price'
         )
 
     def create(self, validated_data):

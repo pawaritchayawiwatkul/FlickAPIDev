@@ -36,8 +36,6 @@ urlpatterns = [
 
     path('lessons/<str:code>/cancel/', LessonViewset.as_view({'put': 'cancel'}), name='lesson-cancel'),
     path('lessons/<str:code>/confirm/', LessonViewset.as_view({'put': 'confirm'}), name='lesson-confirm'),
-    # path('lessons/<str:code>/attended/', LessonViewset.as_view({'put': 'attended'}), name='lesson-attended'),
-    # path('lessons/<str:code>/missed/', LessonViewset.as_view({'put': 'missed'}), name='lesson-missed'),
 
     # Unavailable Time endpoints
     path('unavailable/', UnavailableTimeViewSet.as_view({'get': 'list'}), name='unavailable-list'),

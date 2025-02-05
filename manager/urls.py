@@ -63,7 +63,15 @@ courseViewSet = views.CourseViewset.as_view({
 
 bookingViewSet = views.BookingViewSet.as_view({
     'put': 'check_in',
-    'patch': 'check_out'
+})
+bookingCheckOutViewSet = views.BookingViewSet.as_view({
+    'put': 'check_out',
+})
+
+profileViewSet = views.ProfileViewSet.as_view({
+    'get': 'retrieve',
+    'put': 'update',
+    'delete': 'destroy'
 })
 
 # Enter URL path below
@@ -86,5 +94,7 @@ urlpatterns = format_suffix_patterns([
     path('course', courseViewSet, name='course'),
 
     path('booking/<slug:code>/check-in', bookingViewSet, name='booking-check-in'),
-    path('booking/<slug:code>/check-out', bookingViewSet, name='booking-check-out'),
+    path('booking/<slug:code>/check-out', bookingCheckOutViewSet, name='booking-check-out'),
+
+    path('profile', profileViewSet, name='profile'),  # Add this line
 ])

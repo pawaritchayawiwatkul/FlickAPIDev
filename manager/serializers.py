@@ -6,6 +6,7 @@ from teacher.models import Teacher, Lesson, AvailableTime
 from school.models import Course, School
 from dateutil.relativedelta import relativedelta
 from datetime import date, timedelta
+from core.models import User  # Add this import
 
 class CourseRegistrationSerializer(serializers.ModelSerializer):
     teacher_uuid = serializers.UUIDField(write_only=True, required=True)
@@ -88,7 +89,6 @@ class CourseRegistrationSerializer(serializers.ModelSerializer):
         )
         return registration
     
-
 class CourseSerializer(serializers.ModelSerializer):
     name = serializers.CharField(max_length=100)
     description = serializers.CharField(max_length=300, required=False)
@@ -110,8 +110,10 @@ class CourseSerializer(serializers.ModelSerializer):
             'number_of_lessons', 
             'is_group',
             'image',
-            'school'
+            'school',
+            'uuid'
         )
+        read_only_fields = ('uuid',)
 
     def create(self, validated_data):
         course = Course.objects.create(**validated_data)
@@ -193,6 +195,7 @@ class SchoolAnalyticsSerializer(serializers.ModelSerializer):
 class PurchaseSerializer(serializers.ModelSerializer):
     student_name = serializers.CharField(source='student.user.get_full_name', read_only=True)
     teacher_name = serializers.CharField(source='teacher.user.get_full_name', read_only=True)
+    teacher_uuid = serializers.UUIDField(source='teacher.user.uuid', read_only=True)  # Add teacher_uuid
     course_name = serializers.CharField(source='course.name')
     amount = serializers.SerializerMethodField()
 
@@ -202,12 +205,13 @@ class PurchaseSerializer(serializers.ModelSerializer):
             'uuid', 
             'student_name', 
             'teacher_name', 
+            'teacher_uuid',  # Include teacher_uuid
             'registered_date', 
-            'course_name',  
+            'course_name',
             'amount', 
             'payment_slip', 
             'payment_status', 
-            'lessons_left'
+            'lessons_left',
         ]
 
     def get_amount(self, obj):
@@ -266,9 +270,16 @@ class LessonSerializer(serializers.ModelSerializer):
         model = Lesson
         fields = [
             "code", "start_time", "end_time", "course_name", "course_uuid",
-            "teacher_name", "bookings"
+            "teacher_name", "bookings", "status"
         ]
 
     def get_end_time(self, obj):
         """Calculate the lesson end time based on duration."""
         return obj.datetime + timedelta(minutes=obj.course.duration)
+
+class ProfileSerializer(serializers.ModelSerializer):
+    uuid = serializers.UUIDField(read_only=True)
+    
+    class Meta:
+        model = User
+        fields = ("first_name", "last_name", "phone_number", "email", "uuid", "profile_image")
