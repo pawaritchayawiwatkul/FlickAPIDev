@@ -111,7 +111,8 @@ class Lesson(models.Model):
     ]
 
     code = models.CharField(max_length=12, unique=True)
-    datetime = models.DateTimeField()
+    start_datetime = models.DateTimeField()
+    end_datetime = models.DateTimeField()
     status = models.CharField(choices=STATUS_CHOICES, max_length=5, default="PENTE")
     course = models.ForeignKey(to=Course, on_delete=models.CASCADE, related_name="lesson")
     teacher = models.ForeignKey(to=Teacher, on_delete=models.PROTECT, related_name="lesson", null=True, blank=True)
@@ -141,9 +142,9 @@ class Lesson(models.Model):
         if not self.course.is_group:
             conflicting_lessons = Lesson.objects.filter(
                 teacher=self.teacher,
-                datetime__lt=self.datetime + timedelta(minutes=self.course.duration),  # Use minutes if duration is in minutes
-                datetime__gte=self.datetime,
-                status__in=['CON', 'PENTE']
+                status__in=['CON', 'PENTE'],
+                start_datetime__lt=self.end_datetime,  # Existing lesson starts before new lesson ends
+                end_datetime__gt=self.start_datetime  # Existing lesson ends after new lesson starts
             )
             print("conflicting_lessons", conflicting_lessons)  
             if conflicting_lessons.exists():
@@ -157,11 +158,11 @@ class Lesson(models.Model):
             # Check if the status is changing to 'CON'
             if self.pk is None:
                 status_changed_to_pending = True
-            elif self.status != 'CON':
+            elif self.status != 'PENTE':
                 status_changed_to_pending = False
             else:
                 previous_status = Lesson.objects.get(pk=self.pk).status
-                status_changed_to_pending = self.status == 'CON' and previous_status != 'CON'
+                status_changed_to_pending = self.status == 'PENTE' and previous_status != 'PENTE'
 
             if status_changed_to_pending:
                 self.check_for_conflicts()  # Check for conflicts before saving

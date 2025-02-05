@@ -1,4 +1,5 @@
 from django.shortcuts import get_object_or_404
+from django.core.exceptions import ValidationError
 from django.utils import timezone
 from django.db.utils import IntegrityError
 from django.db.models import Prefetch
@@ -278,7 +279,10 @@ class LessonViewset(ViewSet):
         )
 
         lesson.status = "CON"
-        lesson.save()
+        try:
+            lesson.save()
+        except ValidationError as e:
+            return Response({"error": str(e)}, status=400)
         return Response({"success": "Lesson confirmed successfully."}, status=status.HTTP_200_OK)
 
 class UnavailableTimeViewSet(ViewSet):

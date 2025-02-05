@@ -267,8 +267,9 @@ class BookingViewSet(ViewSet):
 
         # Validate the lesson status query parameter
         if (lesson_status and lesson_status not in self.VALID_STATUSES):
-            raise ValidationError(
-                {"status": f"Invalid status value. Valid choices are: {', '.join(self.VALID_STATUSES.keys())}"}
+            return Response(
+                {"error": f"Invalid status value. Valid choices are: {', '.join(self.VALID_STATUSES.keys())}"},
+                status=400
             )
 
         # Translate status to the corresponding value in VALID_STATUSES

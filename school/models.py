@@ -32,6 +32,10 @@ class School(models.Model):
         return self.teachers.count()
     number_of_teachers.short_description = 'Number of Teachers'
 
+def file_generate_upload_path(instance, filename):
+	# Both filename and instance.file_name should have the same values
+    return f"course_image/{instance.uuid}"
+
 class Course(models.Model):
     name = models.CharField(max_length=100)
     description = models.CharField(max_length=300, null=True, blank=True)
@@ -44,7 +48,7 @@ class Course(models.Model):
     created_date = models.DateField(auto_now_add=True)
     price = models.FloatField(null=True, blank=True)
 
-    image = models.FileField(upload_to="course_images/", null=True, blank=True)
+    image = models.FileField(upload_to=file_generate_upload_path, null=True, blank=True)
 
     is_group = models.BooleanField(default=False)
     group_size = models.IntegerField(null=True)
