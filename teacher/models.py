@@ -111,15 +111,13 @@ class Lesson(models.Model):
     ]
 
     code = models.CharField(max_length=12, unique=True)
-    start_datetime = models.DateTimeField()
+    datetime = models.DateTimeField()
     end_datetime = models.DateTimeField()
     status = models.CharField(choices=STATUS_CHOICES, max_length=5, default="PENTE")
     course = models.ForeignKey(to=Course, on_delete=models.CASCADE, related_name="lesson")
     teacher = models.ForeignKey(to=Teacher, on_delete=models.PROTECT, related_name="lesson", null=True, blank=True)
     
     number_of_client = models.IntegerField(default=0)
-
-    # stop_available = models.DateTimeField(null=True, blank=True)
 
     notified = models.BooleanField(default=False)
     student_event_id = models.CharField(null=True, blank=True)
@@ -143,8 +141,8 @@ class Lesson(models.Model):
             conflicting_lessons = Lesson.objects.filter(
                 teacher=self.teacher,
                 status__in=['CON', 'PENTE'],
-                start_datetime__lt=self.end_datetime,  # Existing lesson starts before new lesson ends
-                end_datetime__gt=self.start_datetime  # Existing lesson ends after new lesson starts
+                datetime__lt=self.end_datetime,  # Existing lesson starts before new lesson ends
+                end_datetime__gt=self.datetime  # Existing lesson ends after new lesson starts
             )
             print("conflicting_lessons", conflicting_lessons)  
             if conflicting_lessons.exists():

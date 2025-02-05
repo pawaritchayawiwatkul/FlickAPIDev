@@ -23,10 +23,11 @@ class ListCourseRegistrationSerializer(serializers.ModelSerializer):
     number_of_lessons = serializers.IntegerField(source="course.number_of_lessons")
     course_image_url = serializers.FileField(source="course.image")
     instructor_name = serializers.CharField(source='teacher.user.get_full_name', read_only=True)
+    status = serializers.CharField(source="payment_status")
 
     class Meta:
         model = CourseRegistration
-        fields = ("uuid", "course_name", "lessons_left", "number_of_lessons", "exp_date", "course_image_url", "instructor_name")
+        fields = ("uuid", "course_name", "lessons_left", "number_of_lessons", "exp_date", "course_image_url", "instructor_name", "status")
 
 class CourseRegistrationDetailSerializer(serializers.ModelSerializer):
     course_name = serializers.CharField(source="course.name")
@@ -58,11 +59,15 @@ class ListLessonSerializer(serializers.ModelSerializer):
         model = Lesson
         fields = ("booked_datetime", "duration", "teacher_name", "course_name", "status", "code", "online")
 
-class CourseRegistrationSerializer(serializers.Serializer):
-    course_uuid = serializers.CharField()
-    student_id = serializers.IntegerField()
+class CourseRegistrationSerializer(serializers.ModelSerializer):
+    course_uuid = serializers.CharField(write_only=True)
+    student_id = serializers.IntegerField(write_only=True)
     payment_slip = serializers.FileField()
-    
+
+    class Meta:
+        model = CourseRegistration
+        fields = ['course_uuid', 'student_id', 'payment_slip']
+
     def create(self, validated_data):
         course = validated_data.get('course')
         if not course.no_exp:
@@ -70,32 +75,18 @@ class CourseRegistrationSerializer(serializers.Serializer):
             validated_data['exp_date'] = now().date() + timedelta(days=exp_range * 30)
         regis = CourseRegistration.objects.create(**validated_data)
         return regis
-    
+
     def validate(self, attrs):
-        course_id = attrs.pop("course_uuid")
-        try: 
-            course = Course.objects.get(uuid=course_id)
+        course_uuid = attrs.pop("course_uuid")
+        try:
+            course = Course.objects.get(uuid=course_uuid)
             attrs['course_id'] = course.id
             attrs['lessons_left'] = course.number_of_lessons
             attrs['course'] = course  # Add course to attrs for use in create method
-        except Student.DoesNotExist:
-            raise serializers.ValidationError({
-                'user_id': 'User not found'
-            })
-        except Teacher.DoesNotExist:
-            raise serializers.ValidationError({
-                'teacher_code': 'Teacher not found'
-            })
         except Course.DoesNotExist:
             raise serializers.ValidationError({
                 'course_code': 'Course not found'
             })
-        
-        payment_slip = attrs.get('payment_slip')
-        if payment_slip:
-            if not payment_slip.name.endswith(('.png', '.jpeg', '.jpg')):
-                raise serializers.ValidationError("Only PNG and JPEG files are allowed for the payment slip.")
-        
         return attrs
 
 class ListCourseSerializer(serializers.ModelSerializer):

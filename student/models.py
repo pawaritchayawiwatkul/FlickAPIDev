@@ -11,7 +11,7 @@ import string
 
 def file_generate_upload_path(instance, filename):
 	# Both filename and instance.file_name should have the same values
-    return f"paymentslips/{instance.uuid}"
+    return f"paymentslips/{instance.uuid}-{filename}"
 
 class CourseRegistration(models.Model):
     PAYMENT_STATUS_CHOICES = [

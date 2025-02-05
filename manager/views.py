@@ -257,6 +257,7 @@ class StaffViewSet(ViewSet):
             "last_name": user.last_name,  # Full name
             "email": user.email,
             "phone_number": user.phone_number,
+            "is_manager": user.is_manager,
         }
 
         return Response({"teacher": teacher_details})

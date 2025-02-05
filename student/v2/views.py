@@ -333,6 +333,7 @@ class BookingViewSet(ViewSet):
                 lesson = Lesson.objects.create(
                     code=Lesson()._generate_unique_code(12),
                     datetime=lesson_datetime,
+                    end_datetime=lesson_datetime + timedelta(hours=1),
                     status="PENTE",
                     course=registration.course,
                     teacher=registration.teacher,

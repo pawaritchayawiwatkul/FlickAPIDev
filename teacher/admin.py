@@ -13,6 +13,7 @@ class LessonAdmin(admin.ModelAdmin):
         'course',
         'teacher',
         'datetime',
+        'end_datetime',
         'status',
         'number_of_client',
         'notified'

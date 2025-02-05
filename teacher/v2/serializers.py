@@ -219,12 +219,16 @@ class CreateCourseRegistrationSerializer(serializers.Serializer):
 class ListLessonSerializer(serializers.ModelSerializer):
     duration = serializers.IntegerField(source="course.duration")
     course_name = serializers.CharField(source="course.name")
+    course_description = serializers.CharField(source="course.description")
     is_group = serializers.BooleanField(source="course.is_group")
     student_name = serializers.SerializerMethodField()
+    student_phone_number = serializers.SerializerMethodField()
+    student_email = serializers.SerializerMethodField()
+    profile_image = serializers.SerializerMethodField()
 
     class Meta:
         model = Lesson
-        fields = ("datetime", "duration", "student_name", "course_name", "code", "status", "is_group")
+        fields = ("datetime", "duration", "student_name", "student_email", "student_phone_number", "course_name", "course_description", "code", "status", "is_group", "profile_image")
 
     def get_student_name(self, obj):
         # Assuming `students` is a related_name for the reverse relationship
@@ -234,7 +238,30 @@ class ListLessonSerializer(serializers.ModelSerializer):
                 return first_booking[0].student.user.first_name
         return None
     
+    def get_student_email(self, obj):
+        # Assuming `students` is a related_name for the reverse relationship
+        first_booking = obj.bookings[:1]
+        if first_booking:
+            if first_booking[0].student.user:
+                return first_booking[0].student.user.first_name
+        return None
+    
+    def get_profile_image(self, obj):
+        # Assuming `students` is a related_name for the reverse relationship
+        first_booking = obj.bookings[:1]
+        if first_booking:
+            if first_booking[0].student.user.profile_image:
+                return first_booking[0].student.user.profile_image
+        return None
 
+    def get_student_phone_number(self, obj):
+        # Assuming `students` is a related_name for the reverse relationship
+        first_booking = obj.bookings[:1]
+        if first_booking:
+            if first_booking[0].student.user:
+                return first_booking[0].student.user.phone_number
+        return None
+    
 class LessonDetailSerializer(serializers.ModelSerializer):
     duration = serializers.IntegerField(source="course.duration")
     description = serializers.CharField(source="course.description")
