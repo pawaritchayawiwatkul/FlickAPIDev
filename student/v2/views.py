@@ -376,3 +376,28 @@ class BookingViewSet(ViewSet):
 
         # Return validation errors if the serializer is invalid
         return Response(ser.errors, status=400)
+
+    def cancel(self, request, code):
+        student = request.user.student
+
+        # Get the booking object
+        booking = get_object_or_404(
+            Booking.objects.select_related("lesson"),
+            code=code,
+            student=student
+        )
+
+        # Check if the booking can be canceled
+        if booking.lesson.status not in ["PENTE", "CON"]:
+            return Response({"error": "Only pending or confirmed bookings can be canceled."}, status=400)
+
+        # Update the booking and lesson status
+        booking.status = "CAN"
+        booking.save()
+
+        lesson = booking.lesson
+        if not lesson.course.is_group:
+            lesson.status = "CAN"
+            lesson.save()
+
+        return Response({"message": "Booking canceled successfully."}, status=200)

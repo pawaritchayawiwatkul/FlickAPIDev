@@ -34,4 +34,5 @@ urlpatterns = [
 
     # Booking routes
     path("bookings", BookingViewSet.as_view({"get": "list", "post": "create"}), name="booking-list"),
+    path("bookings/<slug:code>/cancel", BookingViewSet.as_view({"put": "cancel"}), name="booking-list"),
 ]
