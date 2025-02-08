@@ -38,7 +38,7 @@ urlpatterns = [
     path('lessons/<str:code>/confirm/', LessonViewset.as_view({'put': 'confirm'}), name='lesson-confirm'),
 
     # Unavailable Time endpoints
-    path('unavailable/', UnavailableTimeViewSet.as_view({'get': 'list'}), name='unavailable-list'),
-    path('unavailable/onetime', UnavailableTimeViewSet.as_view({'post': 'create_onetime',}), name='unavailable-onetime'),
-    path('unavailable/<slug:code>/remove', UnavailableTimeViewSet.as_view({'delete': 'remove'}), name='unavailable-remove'),
+    path('unavailable/', UnavailableTimeViewSet.as_view({'get': 'list', 'post': 'create_onetime'}), name='unavailable-list'),
+    # path('unavailable/onetime', UnavailableTimeViewSet.as_view({'post': 'create_onetime',}), name='unavailable-onetime'),
+    path('unavailable/<slug:code>', UnavailableTimeViewSet.as_view({'delete': 'remove'}), name='unavailable-remove'),
 ]

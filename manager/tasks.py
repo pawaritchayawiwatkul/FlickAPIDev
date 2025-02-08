@@ -55,6 +55,7 @@ def generate_upcoming_private(school: School, registrations: List[CourseRegistra
             "course_name": course.name,
             "course_description": course.description,
             "registration_uuid": registration.uuid,
+            'instructor_picture': user.profile_image.url,
             "instructor_name": user.get_full_name(),
             "instructor_phone_number": user.phone_number,
             "instructor_email": user.email,

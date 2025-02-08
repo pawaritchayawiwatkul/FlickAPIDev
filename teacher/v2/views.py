@@ -222,12 +222,12 @@ class LessonViewset(ViewSet):
 
         serializer = ListLessonSerializer(instance=lessons, many=True)
         response_data = serializer.data
-
         if is_bangkok_time:
             for data in response_data:
                 dt = isoparse(data["datetime"])
                 bangkok_time = timezone.make_naive(dt).astimezone(gmt7)
                 data["datetime"] = bangkok_time.strftime('%Y-%m-%dT%H:%M:%SZ')
+                data["end_datetime"] = bangkok_time.strftime('%Y-%m-%dT%H:%M:%SZ')
         return Response(response_data, status=status.HTTP_200_OK)
 
     def retrieve(self, request, code):
@@ -297,18 +297,24 @@ class UnavailableTimeViewSet(ViewSet):
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-    # def create_regular(self, request):
-    #     data = request.data.copy()
-    #     data["teacher"] = request.user.teacher.id
-    #     serializer = CreateUnavailableTimeRegularSerializer(data=data)
-    #     if serializer.is_valid():
-    #         serializer.save()
-    #         return Response(serializer.data, status=status.HTTP_201_CREATED)
-    #     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
     def list(self, request):
         teacher = request.user.teacher
-        onetime_unavailable = UnavailableTimeOneTime.objects.filter(teacher=teacher)
+        filters = {"teacher": teacher}
+
+        # Fetch unavailable times by month
+        month = request.query_params.get("month")
+        year = request.query_params.get("year")
+        if month and year:
+            try:
+                month = int(month)
+                year = int(year)
+                start_date = timezone.datetime(year, month, 1, tzinfo=timezone.utc)
+                end_date = (start_date + timedelta(days=32)).replace(day=1)
+                filters["date__range"] = (start_date, end_date)
+            except ValueError:
+                return Response({"error": "Invalid month or year"}, status=status.HTTP_400_BAD_REQUEST)
+
+        onetime_unavailable = UnavailableTimeOneTime.objects.filter(**filters)
         # regular_unavailable = UnavailableTimeRegular.objects.filter(teacher=teacher)
         onetime_serializer = ListUnavailableTimeOneTimeSerializer(onetime_unavailable, many=True)
         # regular_serializer = ListUnavailableTimeRegularSerializer(regular_unavailable, many=True)

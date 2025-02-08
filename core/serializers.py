@@ -15,10 +15,16 @@ from rest_framework.utils import html, model_meta, representation
 import copy
 from rest_framework.fields import SkipField
 from rest_framework.relations import Hyperlink, PKOnlyObject  # NOQA # isort:skip
+from notifications.models import Notification
 
 User = get_user_model()
     
 ALL_FIELDS = '__all__'
+
+class NotificationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Notification
+        fields = '__all__'
 
 class CreateUserSerializer(serializers.ModelSerializer):
     first_name = serializers.CharField(required=True)
@@ -33,7 +39,7 @@ class CreateUserSerializer(serializers.ModelSerializer):
 class UserUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ['first_name', 'last_name', 'email', 'phone_number', 'profile_image']  # Fields to be updated
+        fields = ['first_name', 'last_name', 'email', 'phone_number', 'profile_image', 'is_manager']  # Fields to be updated
 
     # Optionally, we can add additional validation or logic if needed
     def validate_phone_number(self, value):

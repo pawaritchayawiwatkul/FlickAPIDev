@@ -17,23 +17,14 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import path
 from django.urls import path, include
-from core.views import DeviceViewSet
+from core.views import NotificationViewSet
+
+notificationViewSet = NotificationViewSet.as_view({
+    'get': 'list',
+})
 
 urlpatterns = [
-    path('admin/', admin.site.urls),
-    path('manager/', include('manager.urls', namespace='manager')),
-    path('student/', include('student.urls', namespace='student')),
-    path('teacher/', include('teacher.urls', namespace='teacher')),
-    path('auth/', include('djoser.urls')),
-    path('auth/', include('djoser.urls.jwt')),
-    path('auth/', include('core.authurls')),
-    path('notification/', include('core.notiurls')),
-    path('calendar/', include('googlecalendar.urls')),
-
-    path('devices', DeviceViewSet.as_view({'delete': 'remove', 'post': 'create'}), name='create_fcm_device'),
-    path('notification', DeviceViewSet.as_view({'put': 'update'}), name='create_fcm_device'),
-
-    path("__debug__/", include("debug_toolbar.urls")),
+    path('', notificationViewSet, name='forgot-password'),
 ]
 
 # if settings.DEBUG:

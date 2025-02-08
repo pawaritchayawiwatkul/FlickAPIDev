@@ -38,7 +38,8 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-
+    
+    'notifications',
     'django_celery_beat',
     'rest_framework',
     'djoser',
@@ -96,7 +97,7 @@ if DEBUG:
     DATABASES = {
         'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'postgres',
+        'NAME': 'development',
         'USER': 'postgres',
         'PASSWORD': 'Pluem9988!',
         'HOST': 'localhost',

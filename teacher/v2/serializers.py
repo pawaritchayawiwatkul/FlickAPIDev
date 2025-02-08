@@ -251,7 +251,7 @@ class ListLessonSerializer(serializers.ModelSerializer):
         first_booking = obj.bookings[:1]
         if first_booking:
             if first_booking[0].student.user.profile_image:
-                return first_booking[0].student.user.profile_image
+                return first_booking[0].student.user.profile_image.url
         return None
 
     def get_student_phone_number(self, obj):

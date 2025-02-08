@@ -21,3 +21,4 @@ google-auth-oauthlib==1.2.1
 django-cors-headers==4.6.0
 twilio==9.4.3
 Pillow==11.1.0
+django-notifications-hq==1.8.3

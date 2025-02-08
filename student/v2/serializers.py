@@ -131,6 +131,7 @@ class ListLessonCourseSerializer(serializers.ModelSerializer):
     course_name = serializers.CharField(source='course.name', read_only=True)
     course_description = serializers.CharField(source='course.description', read_only=True)
     course_uuid = serializers.UUIDField(source='course.uuid', read_only=True)
+    instructor_picture = serializers.FileField(source='teacher.user.profile_image', read_only=True)
     instructor_name = serializers.CharField(source='teacher.user.get_full_name', read_only=True)
     instructor_phone_number = serializers.CharField(source='teacher.user.phone_number', read_only=True)
     instructor_email = serializers.CharField(source='teacher.user.email', read_only=True)
@@ -147,6 +148,7 @@ class ListLessonCourseSerializer(serializers.ModelSerializer):
             'course_description',
             'course_uuid',
             'number_of_client',
+            'instructor_picture'
             'instructor_name',
             'instructor_phone_number',
             'instructor_email',
@@ -179,6 +181,7 @@ class ListLessonPrivateSerializer(serializers.ModelSerializer):
     course_name = serializers.CharField(source='course.name', read_only=True)
     course_description = serializers.CharField(source='course.description', read_only=True)
     course_uuid = serializers.UUIDField(source='course.uuid', read_only=True)
+    instructor_picture = serializers.FileField(source='teacher.user.profile_image', read_only=True)
     instructor_name = serializers.CharField(source='teacher.user.get_full_name', read_only=True)
     instructor_phone_number = serializers.CharField(source='teacher.user.phone_number', read_only=True)
     instructor_email = serializers.CharField(source='teacher.user.email', read_only=True)
@@ -193,6 +196,7 @@ class ListLessonPrivateSerializer(serializers.ModelSerializer):
             'course_name',
             'course_description',
             'course_uuid',
+            'instructor_picture',
             'instructor_name',
             'instructor_phone_number',
             'instructor_email',

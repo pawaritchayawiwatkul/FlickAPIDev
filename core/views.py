@@ -5,7 +5,6 @@ from rest_framework.views import Response
 from rest_framework.viewsets import ViewSet
 from fcm_django.api.rest_framework import FCMDeviceAuthorizedViewSet
 from django.shortcuts import render
-from core.models import User
 from rest_framework import status
 import random
 from django.utils.timezone import now
@@ -15,6 +14,8 @@ from utils.sms import SMSClient
 from django.core.cache import cache
 import hashlib
 import secrets
+from core.models import User
+from core.serializers import NotificationSerializer
 
 # Create your views here.
 
@@ -29,6 +30,20 @@ def forgot_password(request, uuid, token):
     return render(request, "forgot_password.html", context)
 
 
+class NotificationViewSet(ViewSet):
+    """
+    API endpoint that allows users to view their notifications.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def list(self, request):
+        """
+        List all unread notifications for the authenticated user.
+        """
+        notifications = request.user.notifications.unread()
+        serializer = NotificationSerializer(notifications, many=True)
+        return Response(serializer.data)
+    
 @api_view(['GET'])
 def check_usertype(request, type):
     if type == 'teacher':

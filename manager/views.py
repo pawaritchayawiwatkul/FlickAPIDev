@@ -308,20 +308,15 @@ class StaffViewSet(ViewSet):
         serializer = UserUpdateSerializer(teacher.user, data=request.data, partial=True)  # partial=True allows partial updates
         
         if serializer.is_valid():
-            serializer.save()  # Save the updated data
+            instance = serializer.save()  # Save the updated data
             
-            # Handle the is_manager field
-            is_manager = request.data.get('is_manager', None)
-            if is_manager is not None:
-                teacher.user.is_manager = is_manager
-                teacher.user.save()
                 
-                if is_manager:
-                    # Create Admin instance if it doesn't exist
-                    Admin.objects.get_or_create(user=teacher.user, school=admin.school)
-                else:
-                    # Remove Admin instance if it exists
-                    Admin.objects.filter(user=teacher.user).delete()
+            if instance.is_manager:
+                # Create Admin instance if it doesn't exist
+                Admin.objects.get_or_create(user=teacher.user, school=admin.school)
+            else:
+                # Remove Admin instance if it exists
+                Admin.objects.filter(user=teacher.user).delete()
             
             return Response({"message": "User info updated successfully."}, status=status.HTTP_200_OK)
         
