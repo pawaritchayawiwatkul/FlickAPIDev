@@ -9,9 +9,14 @@ insightViewSet = views.InsightViewSet.as_view({
 })
 
 lessonViewSet = views.LessonViewSet.as_view({
-    'get': "list"
+    'get': "list",
+    'post': 'create'
+
 })
 
+lessonCancelViewSet = views.LessonViewSet.as_view({
+    'put': 'cancel'
+})
 
 registrationViewSet = views.CourseRegistrationViewSet.as_view({
     'get': "list"
@@ -64,8 +69,13 @@ courseViewSet = views.CourseViewset.as_view({
 bookingViewSet = views.BookingViewSet.as_view({
     'put': 'check_in',
 })
+
 bookingCheckOutViewSet = views.BookingViewSet.as_view({
     'put': 'check_out',
+})
+
+bookingClearViewSet = views.BookingViewSet.as_view({
+    'put': 'clear',
 })
 
 profileViewSet = views.ProfileViewSet.as_view({
@@ -79,6 +89,8 @@ urlpatterns = format_suffix_patterns([
     path('insight', insightViewSet, name='insight'),
 
     path('lesson', lessonViewSet, name='profile-add'),
+    path('lesson/<slug:code>/cancel', lessonCancelViewSet, name='lesson-cancel'),
+
     path('purchase', registrationViewSet, name='purchase'),
     path('purchase/<slug:uuid>/payment-validation', paymentViewset, name='purchase'),
 
@@ -93,6 +105,7 @@ urlpatterns = format_suffix_patterns([
 
     path('course', courseViewSet, name='course'),
 
+    path('booking/<slug:code>/clear', bookingClearViewSet, name='booking-check-in'),
     path('booking/<slug:code>/check-in', bookingViewSet, name='booking-check-in'),
     path('booking/<slug:code>/check-out', bookingCheckOutViewSet, name='booking-check-out'),
 

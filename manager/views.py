@@ -9,6 +9,7 @@ from teacher.models import Teacher, AvailableTime
 from manager.models import Admin
 from manager.serializers import ( 
     CourseRegistrationSerializer, 
+    CreateLessonSerializer,
     CourseSerializer, 
     PurchaseSerializer, 
     AvailableTimeSerializer, 
@@ -111,6 +112,32 @@ class LessonViewSet(ViewSet):
         serialized_data = LessonSerializer(lessons, many=True).data
 
         return Response(serialized_data, status=200)
+
+    def create(self, request):
+        # Retrieve the Admin instance for the logged-in user
+        admin = Admin.objects.filter(user_id=request.user.id).first()
+        if not admin:
+            return Response({"error": "Admin not found for the current user."}, status=404)
+
+        # Validate the request data
+        serializer = CreateLessonSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=201)
+        return Response(serializer.errors, status=400)
+    
+    def cancel(self, request, code):
+        if not code:
+            return Response({"error": "Lesson UUID is required."}, status=400)
+
+        try:
+            lesson = Lesson.objects.get(code=code)
+        except Lesson.DoesNotExist:
+            return Response({"error": "Lesson not found."}, status=404)
+
+        lesson.status = 'CAN'
+        lesson.save()
+        return Response({"message": "Lesson cancelled successfully."}, status=200)
 
 class CourseRegistrationViewSet(ViewSet):
     permission_classes = [IsAuthenticated, IsManager]
@@ -506,12 +533,16 @@ class ClientViewSet(ViewSet):
             return Response({"error": "Admin not found for the current user."}, status=404)
 
         # Retrieve the teacher by primary key (id)
-        student = Student.objects.prefetch_related(
-            Prefetch(
-                "registration",
-                queryset=CourseRegistration.objects.select_related("course"),
-                to_attr="registrations"
-                )).get(user__uuid=uuid, school=admin.school)
+        try:
+            student = Student.objects.prefetch_related(
+                Prefetch(
+                    "registration",
+                    queryset=CourseRegistration.objects.select_related("course"),
+                    to_attr="registrations"
+                )
+            ).get(user__uuid=uuid, school=admin.school)
+        except Student.DoesNotExist:
+            return Response({"error": "Student not found."}, status=404)
         if not student:
             return Response({"error": "Teacher not found."}, status=404)
 
@@ -668,10 +699,19 @@ class BookingViewSet(ViewSet):
         except Booking.DoesNotExist:
             return Response({"error": "Booking not found."}, status=status.HTTP_404_NOT_FOUND)
 
-        booking.check_in = datetime.now()
+        check_in_time = request.data.get("datetime")
+        if not check_in_time:
+            return Response({"error": "Check-in time is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            check_in_time = datetime.strptime(check_in_time, "%Y-%m-%dT%H:%M:%S")
+        except ValueError:
+            return Response({"error": "Invalid check-in time format. Use 'YYYY-MM-DDTHH:MM:SS'."}, status=status.HTTP_400_BAD_REQUEST)
+
+        booking.check_in = check_in_time
         booking.save()
         return Response({"message": "Check-in successful."}, status=status.HTTP_200_OK)
-
+    
     def check_out(self, request, code=None):
         try:
             booking = Booking.objects.select_related("registration").get(code=code)
@@ -681,12 +721,36 @@ class BookingViewSet(ViewSet):
         if not booking.check_in:
             return Response({"error": "Check-in is required before check-out."}, status=status.HTTP_400_BAD_REQUEST)
 
-        booking.check_out = datetime.now()
+        check_out_time = request.data.get("datetime")
+        if not check_out_time:
+            return Response({"error": "Check-out time is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            check_out_time = datetime.strptime(check_out_time, "%Y-%m-%dT%H:%M:%S")
+        except ValueError:
+            return Response({"error": "Invalid check-out time format. Use 'YYYY-MM-DDTHH:MM:SS'."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if not booking.check_out:
+            booking.registration.lessons_left -= 1
+            booking.registration.save()
+        booking.check_out = check_out_time
         booking.save()
-        booking.registration.lessons_left -= 1
-        booking.registration.save()
         return Response({"message": "Check-out successful."}, status=status.HTTP_200_OK)
 
+    def clear(self, request, code=None):
+        try:
+            booking = Booking.objects.get(code=code)
+        except Booking.DoesNotExist:
+            return Response({"error": "Booking not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        if booking.check_out:
+            booking.registration.lessons_left += 1
+            booking.registration.save()
+        booking.check_in = None
+        booking.check_out = None
+        booking.save()
+        return Response({"message": "Booking cleared."}, status=status.HTTP_200_OK)
+    
 class ProfileViewSet(ViewSet):
     permission_classes = [IsAuthenticated, IsManager]
 

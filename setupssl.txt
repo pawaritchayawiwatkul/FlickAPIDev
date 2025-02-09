@@ -10,6 +10,9 @@ sudo systemctl daemon-reload
 sudo systemctl start gunicorn.service
 sudo systemctl status gunicorn.service
 
+sudo systemctl daemon-reload
+sudo systemctl restart gunicorn.service
+sudo systemctl status gunicorn.service
 
 
 # Set Up SSL

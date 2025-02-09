@@ -98,12 +98,14 @@ class CourseSerializer(serializers.ModelSerializer):
     number_of_lessons = serializers.IntegerField()
     is_group = serializers.BooleanField(default=False)
     image = serializers.FileField(required=True)
+    price = serializers.FloatField(required=True)
     
     class Meta:
         model = Course
         fields = (
             'name', 
             'description', 
+            'price',
             'no_exp', 
             'exp_range', 
             'duration', 
@@ -283,3 +285,46 @@ class ProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ("first_name", "last_name", "phone_number", "email", "uuid", "profile_image")
+
+class CreateLessonSerializer(serializers.ModelSerializer):
+    datetime = serializers.DateTimeField()
+    student_uuid = serializers.UUIDField(write_only=True, required=True)
+    registration_uuid = serializers.UUIDField(write_only=True, required=True)
+
+    class Meta:
+        model = Lesson
+        fields = [
+            "datetime", 
+            "student_uuid", 
+            "registration_uuid"
+        ]
+
+    def create(self, validated_data):
+        student_uuid = validated_data.pop('student_uuid')
+        registration_uuid = validated_data.pop('registration_uuid')
+
+        try:
+            student = Student.objects.get(user__uuid=student_uuid)
+        except Student.DoesNotExist:
+            raise serializers.ValidationError({"student_uuid": "Student with this UUID does not exist."})
+
+        try:
+            registration = CourseRegistration.objects.get(uuid=registration_uuid)
+        except CourseRegistration.DoesNotExist:
+            raise serializers.ValidationError({"registration_uuid": "Registration with this UUID does not exist."})
+
+        lesson = Lesson.objects.create(
+            status='CON', 
+            course=registration.course,  # Set course to registration.course
+            datetime=validated_data['datetime'],
+            end_datetime=validated_data['datetime'] + timedelta(minutes=registration.course.duration),
+            number_of_client=1,
+        )
+        
+        Booking.objects.create(
+            lesson=lesson,
+            student=student,
+            registration=registration,
+            user_type='student'
+        )
+        return lesson
