@@ -22,7 +22,7 @@ from django.db.utils import IntegrityError
 from internal.permissions import IsManager
 from django.db import transaction
 from django.utils.dateparse import parse_date
-
+from utils.notification_utils import send_notification
 
 class InsightViewSet(ViewSet):
     permission_classes = [IsAuthenticated, IsManager]
@@ -187,7 +187,7 @@ class CourseRegistrationViewSet(ViewSet):
 
         # Retrieve the registration by UUID
         try:
-            registration = CourseRegistration.objects.get(uuid=uuid, course__school=admin.school)
+            registration = CourseRegistration.objects.select_related("student__user").get(uuid=uuid, course__school=admin.school)
         except CourseRegistration.DoesNotExist:
             return Response({"error": "Registration not found."}, status=404)
 
@@ -209,7 +209,7 @@ class CourseRegistrationViewSet(ViewSet):
                 return Response({"error": "Teacher not found or does not belong to the admin's school."}, status=404)
 
             registration.teacher = teacher
-
+            send_notification(teacher.user, "New Registration Assigned", f"An admin has assigned a new student registration to you on {registration.course.name}.")
             # Check if the student is already associated with the teacher
             if not teacher.student.filter(id=registration.student.id).exists():
                 teacher.student.add(registration.student)
@@ -217,7 +217,10 @@ class CourseRegistrationViewSet(ViewSet):
         # Update the payment status
         registration.payment_status = payment_status
         registration.save()
-
+        if payment_status == "confirm":
+            send_notification(registration.student.user, "Payment Confirmed", f"Your payment status has been updated to {payment_status}.")
+        else:
+            send_notification(registration.student.user, "Payment Denied", f"Your payment status has been updated to {payment_status}.")
         return Response({"message": "Payment status and teacher updated successfully."}, status=200)
     
 class StaffViewSet(ViewSet):

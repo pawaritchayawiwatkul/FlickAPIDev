@@ -147,6 +147,7 @@ class Booking(models.Model):
 
     check_in = models.TimeField(null=True, blank=True)
     check_out = models.TimeField(null=True, blank=True)
+    
     def __str__(self):
         if self.user_type == 'student' and self.student:
             return f"Student Booking: {self.student} - Status: {self.status}"

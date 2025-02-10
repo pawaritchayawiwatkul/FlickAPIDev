@@ -9,6 +9,7 @@ from operator import or_
 from manager.tasks import generate_upcoming_private
 from student.models import CourseRegistration, Student, StudentTeacherRelation, Booking
 from teacher.models import Teacher, Lesson
+from manager.models import Admin
 from school.models import Course
 from student.v2.serializers import (
     CreateBookingSerializer,
@@ -26,7 +27,7 @@ from django.core.exceptions import ValidationError
 from school.models import School
 from core.serializers import ProfileSerializer
 from internal.permissions import IsStudent
-from uuid import UUID
+from utils.notification_utils import send_notification
 from datetime import datetime, timedelta
 import pytz
 from django.utils import timezone
@@ -121,6 +122,16 @@ class RegistrationViewSet(ViewSet):
         ser = CourseRegistrationSerializer(data=data)
         if ser.is_valid():
             obj = ser.save()
+            # Fetch the CourseRegistration with prefetch_related for school admins and their user details
+            regis = CourseRegistration.objects.prefetch_related("school__admin__user").get(id=obj.id)
+
+            # Notify all admins without calling `.all()`
+            for admin in regis.school.admin:  # Directly iterating over the related manager
+                send_notification(
+                    admin.user,
+                    "New Course Registration",
+                    f"A new course registration has been made by {request.user.first_name}. Please review and confirm the registration."
+                )
             return Response({"registration_id": obj.uuid}, status=201)
         return Response(ser.errors, status=400)
 
@@ -375,13 +386,14 @@ class BookingViewSet(ViewSet):
             return Response({"message": "Booking created successfully."}, status=201)
 
         # Return validation errors if the serializer is invalid
+        send_notification(lesson.teacher.user, "New Booking Alert", f"{request.user.first_name} has booked a class with you. Check your schedule for details.")
         return Response(ser.errors, status=400)
 
     def cancel(self, request, code):
         student = request.user.student
 
         # Get the booking object
-        booking = get_object_or_404(
+        booking = get_object_or_404(    
             Booking.objects.select_related("lesson"),
             code=code,
             student=student
@@ -399,5 +411,7 @@ class BookingViewSet(ViewSet):
         if not lesson.course.is_group:
             lesson.status = "CAN"
             lesson.save()
+
+        send_notification(lesson.teacher.user, "Class Cancellation", f"{request.user.first_name} has canceled a class with you. Check your schedule for details.")
 
         return Response({"message": "Booking canceled successfully."}, status=200)

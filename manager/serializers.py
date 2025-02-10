@@ -313,18 +313,22 @@ class CreateLessonSerializer(serializers.ModelSerializer):
         except CourseRegistration.DoesNotExist:
             raise serializers.ValidationError({"registration_uuid": "Registration with this UUID does not exist."})
 
-        lesson = Lesson.objects.create(
-            status='CON', 
-            course=registration.course,  # Set course to registration.course
-            datetime=validated_data['datetime'],
-            end_datetime=validated_data['datetime'] + timedelta(minutes=registration.course.duration),
-            number_of_client=1,
-        )
+        try:
+            lesson = Lesson.objects.create(
+                status='CON', 
+                course=registration.course,  # Set course to registration.course
+                datetime=validated_data['datetime'],
+                end_datetime=validated_data['datetime'] + timedelta(minutes=registration.course.duration),
+                number_of_client=1,
+            )
+        except Exception as e:
+            raise serializers.ValidationError({"lesson_creation": str(e)})
         
         Booking.objects.create(
             lesson=lesson,
             student=student,
             registration=registration,
-            user_type='student'
+            user_type='student',
+            status='COM'
         )
         return lesson
