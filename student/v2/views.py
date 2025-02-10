@@ -9,7 +9,6 @@ from operator import or_
 from manager.tasks import generate_upcoming_private
 from student.models import CourseRegistration, Student, StudentTeacherRelation, Booking
 from teacher.models import Teacher, Lesson
-from manager.models import Admin
 from school.models import Course
 from student.v2.serializers import (
     CreateBookingSerializer,
@@ -20,7 +19,6 @@ from student.v2.serializers import (
     CourseRegistrationSerializer,
     ListTeacherSerializer,
     ListCourseRegistrationSerializer,
-    ListLessonPrivateSerializer,
     BookingDetailSerializer
 )
 from django.core.exceptions import ValidationError
@@ -383,10 +381,10 @@ class BookingViewSet(ViewSet):
                 lesson.number_of_client += 1  # Update client count only for group courses
                 lesson.status = "CON"
             lesson.save()
+            send_notification(lesson.teacher.user, "New Booking Alert", f"{request.user.first_name} has booked a class with you. Check your schedule for details.")
             return Response({"message": "Booking created successfully."}, status=201)
 
         # Return validation errors if the serializer is invalid
-        send_notification(lesson.teacher.user, "New Booking Alert", f"{request.user.first_name} has booked a class with you. Check your schedule for details.")
         return Response(ser.errors, status=400)
 
     def cancel(self, request, code):
