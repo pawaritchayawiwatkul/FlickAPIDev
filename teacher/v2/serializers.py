@@ -173,18 +173,6 @@ class CreateCourseRegistrationSerializer(serializers.Serializer):
 
     def create(self, validated_data):
         regis = CourseRegistration.objects.create(**validated_data)
-        student = validated_data['student']
-        course = validated_data['course']
-        
-        devices = FCMDevice.objects.filter(user=student.user_id)
-        devices.send_message(
-                message = Message(
-                    notification=Notification(
-                        title=f"Registration Successful",
-                        body=f"The course {course.name} is registered"
-                    ),
-                ),
-            )
         return regis
     
     def validate(self, attrs):
@@ -243,7 +231,7 @@ class ListLessonSerializer(serializers.ModelSerializer):
         first_booking = obj.bookings[:1]
         if first_booking:
             if first_booking[0].student.user:
-                return first_booking[0].student.user.first_name
+                return first_booking[0].student.user.email
         return None
     
     def get_profile_image(self, obj):

@@ -7,6 +7,7 @@ from django.db.models import Q, F, Prefetch
 from functools import reduce
 from operator import or_
 from manager.tasks import generate_upcoming_private
+from manager.models import Admin
 from student.models import CourseRegistration, Student, StudentTeacherRelation, Booking
 from teacher.models import Teacher, Lesson
 from school.models import Course
@@ -121,10 +122,15 @@ class RegistrationViewSet(ViewSet):
         if ser.is_valid():
             obj = ser.save()
             # Fetch the CourseRegistration with prefetch_related for school admins and their user details
-            regis = CourseRegistration.objects.prefetch_related("school__admin__user").get(id=obj.id)
+            regis = CourseRegistration.objects.prefetch_related(
+                Prefetch(
+                    "course__school__admins", 
+                    queryset=Admin.objects.select_related("user"), 
+                    to_attr='cached_admins')
+            ).get(id=obj.id)
 
-            # Notify all admins without calling `.all()`
-            for admin in regis.school.admin:  # Directly iterating over the related manager
+            # Notify all admins using the cached attribute
+            for admin in regis.course.school.cached_admins:
                 send_notification(
                     admin.user,
                     "New Course Registration",
@@ -293,7 +299,6 @@ class BookingViewSet(ViewSet):
         # Query and serialize bookings
         bookings = Booking.objects.filter(**filters).select_related("lesson__course", "lesson__teacher")
         ser = BookingDetailSerializer(instance=bookings, many=True)
-        # ser = ListBookingSerializer(instance=bookings, many=True)
 
         return Response(ser.data, status=200)
     

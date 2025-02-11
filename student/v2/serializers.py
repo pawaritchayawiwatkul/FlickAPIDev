@@ -241,7 +241,7 @@ class ListBookingSerializer(serializers.ModelSerializer):
 class BookingDetailSerializer(serializers.ModelSerializer):
     course_name = serializers.CharField(source='lesson.course.name', read_only=True)
     course_description = serializers.CharField(source='lesson.course.description', read_only=True)
-    instructor_image_url = serializers.FileField(source="lesson.teacher.user.profile_image")
+    instructor_image_url = serializers.FileField(source="lesson.teacher.user.profile_image", read_only=True)
     instructor_name = serializers.CharField(source='lesson.teacher.user.get_full_name', read_only=True)
     instructor_phone_number = serializers.CharField(source='lesson.teacher.user.phone_number', read_only=True)
     instructor_email = serializers.CharField(source='lesson.teacher.user.email', read_only=True)
@@ -267,6 +267,19 @@ class BookingDetailSerializer(serializers.ModelSerializer):
             'location',
             'is_group'
         ]
+
+    def to_representation(self, instance):
+        """Customize representation to handle null teacher."""
+        representation = super().to_representation(instance)
+
+        # If no teacher is assigned, set instructor fields to null
+        if instance.lesson.teacher is None:
+            representation['instructor_image_url'] = None
+            representation['instructor_name'] = None
+            representation['instructor_phone_number'] = None
+            representation['instructor_email'] = None
+
+        return representation
 
 class CreateBookingSerializer(serializers.ModelSerializer):
     lesson_id = serializers.IntegerField(write_only=True)

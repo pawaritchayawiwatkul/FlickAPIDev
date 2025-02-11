@@ -175,7 +175,7 @@ class RegistrationViewset(ViewSet):
         data["teacher_id"] = request.user.id
         serializer = CreateCourseRegistrationSerializer(data=data)
         if serializer.is_valid():
-            send_notification(serializer["student"].user, "New Course Available", f"{request.user.first_name} has registered a new course. Check it out and enroll now!")
+            send_notification(serializer.validated_data["student"].user, "New Course Available", f"{request.user.first_name} has registered a new course. Check it out and enroll now!")
             registration = serializer.create(serializer.validated_data)
             return Response({"registration_id": registration.uuid}, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -262,7 +262,13 @@ class LessonViewset(ViewSet):
     
     def cancel(self, request, code):
         lesson = get_object_or_404(
-            Lesson,
+            Lesson.objects.prefetch_related(
+                Prefetch(
+                    "booking",
+                    queryset=Booking.objects.select_related("student__user"),
+                    to_attr="bookings"
+                )
+            ),
             code=code, teacher__user_id=request.user.id
         )
 
@@ -271,14 +277,21 @@ class LessonViewset(ViewSet):
         if lesson.teacher_event_id:
             delete_google_calendar_event(request.user, lesson.teacher_event_id)
 
-        for booking in lesson.booking:
+        for booking in lesson.bookings:
             send_notification(booking.student.user, "Class Canceled", f"{request.user.first_name} has canceled your class. Please contact us for more information.")
         return Response({"success": "Lesson canceled successfully."}, status=status.HTTP_200_OK)
 
     def confirm(self, request, code):
         lesson = get_object_or_404(
-            Lesson.objects.select_related("course", "booking__student__user"),
-            code=code, teacher__user_id=request.user.id, status="PENTE"
+            Lesson.objects.prefetch_related(
+                Prefetch(
+                    "booking",
+                    queryset=Booking.objects.select_related("student__user"),
+                    to_attr="bookings"
+                )
+            ).select_related("course"),
+            code=code, teacher__user_id=request.user.id, 
+            # status="PENTE"
         )
 
         lesson.status = "CON"
@@ -287,7 +300,7 @@ class LessonViewset(ViewSet):
         except ValidationError as e:
             return Response({"error": str(e)}, status=400)
         
-        for booking in lesson.booking:
+        for booking in lesson.bookings:
             send_notification(booking.student.user, "Class Confirmed", f"{request.user.first_name} has confirmed your class. See you there!")
         return Response({"success": "Lesson confirmed successfully."}, status=status.HTTP_200_OK)
 
