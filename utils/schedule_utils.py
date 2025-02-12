@@ -36,22 +36,24 @@ def merge_schedule(validated_data, unavailables):
     validated_data['stop'] = new_stop
     return validated_data, overlap
 
-def compute_available_time(unavailables, lessons, date_time, start, stop, duration, interval):
+def compute_available_time(unavailables, lessons, date, start, stop, duration, interval, gap):
     duration_td = timedelta(minutes=duration)
     interval_td = timedelta(minutes=interval)
+    gap_td = timedelta(minutes=gap)
     
     # Convert start and stop into aware datetime objects once
-    current_time = timezone.make_aware(datetime.combine(date_time, start), timezone=gmt7)
-    stop_time = timezone.make_aware(datetime.combine(date_time, stop), timezone=gmt7)
+    current_time = timezone.make_aware(datetime.combine(date, start), timezone=gmt7)
+    stop_time = timezone.make_aware(datetime.combine(date, stop), timezone=gmt7)
     
     # Convert unavailables and lessons into sorted lists of tuples (start, stop)
     unavailable_intervals = sorted(
-        [(timezone.make_aware(datetime.combine(date_time, u.start), timezone=gmt7),
-          timezone.make_aware(datetime.combine(date_time, u.stop), timezone=gmt7)) for u in unavailables]
+        [(timezone.make_aware(datetime.combine(date, u.start), timezone=gmt7),
+          timezone.make_aware(datetime.combine(date, u.stop), timezone=gmt7)) 
+         for u in unavailables if u.date == date]
     )
     
     lesson_intervals = sorted(
-        [(l.datetime, l.datetime + timedelta(minutes=l.course.duration)) for l in lessons]
+        [(l.datetime, l.datetime + duration_td + gap_td) for l in lessons if l.datetime.date() == date]
     )
     
     # Extract just the start times for binary search
@@ -78,7 +80,10 @@ def compute_available_time(unavailables, lessons, date_time, start, stop, durati
             available_times.append({"start": current_time, "end": end_time})
 
         current_time += interval_td
-
+    # Print start, stop, and unavailables if start is 17th February
+    if date == datetime(2025, 2, 17).date():
+        print(f"Una: {unavailable_intervals}, \n\nLessons: {lesson_intervals}, \n\nAvailables: {available_times}")
+    print()
     return available_times
 
 def generate_unique_code(existing_codes, length=8):

@@ -86,8 +86,6 @@ class ProfileViewSet(ViewSet):
 
 
 class StudentViewSet(ViewSet):
-    # permission_classes = [IsAuthenticated, IsTeacher]
-    
     def get_permissions(self):
         """Apply IsManager only to the create method"""
         if self.action == "create":
@@ -127,7 +125,6 @@ class StudentViewSet(ViewSet):
             return Response({"error": "An unexpected error occurred."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     def list_bookings(self, request, uuid):
-
         # Get all bookings with optional student filter
         bookings = Booking.objects.select_related("lesson__course__school", "lesson__teacher").filter(student__user__uuid=uuid)
         
@@ -136,7 +133,6 @@ class StudentViewSet(ViewSet):
         return Response(serializer.data, status=status.HTTP_200_OK)
     
     def list_purchases(self, request, uuid):
-
         # Get all bookings with optional student filter
         registrations = CourseRegistration.objects.select_related("course").filter(student__user__uuid=uuid)
         

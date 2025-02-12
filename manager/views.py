@@ -2,6 +2,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.viewsets import ViewSet
 from rest_framework.response import Response
 from django.db.models import Prefetch, Sum, Count
+from django.db.models.deletion import ProtectedError
 from datetime import datetime, timedelta
 from student.models import Lesson, CourseRegistration, StudentTeacherRelation, Student, Booking
 from school.models import School, Course  # Ensure Admin model is imported
@@ -9,8 +10,10 @@ from teacher.models import Teacher, AvailableTime
 from manager.models import Admin
 from manager.serializers import ( 
     CourseRegistrationSerializer, 
+    RegistrationDetailSerializer,
     CreateLessonSerializer,
     CourseSerializer, 
+    CourseDetailSerializer,
     PurchaseSerializer, 
     AvailableTimeSerializer, 
     LessonSerializer,
@@ -23,6 +26,7 @@ from internal.permissions import IsManager
 from django.db import transaction
 from django.utils.dateparse import parse_date
 from utils.notification_utils import send_notification
+from utils.schedule_utils import compute_available_time
 
 class InsightViewSet(ViewSet):
     permission_classes = [IsAuthenticated, IsManager]
@@ -106,11 +110,10 @@ class LessonViewSet(ViewSet):
             )
             .filter(**filters)
         )
-        print(lessons)
 
         # Build response data
         serialized_data = LessonSerializer(lessons, many=True).data
-
+        print(serialized_data)
         return Response(serialized_data, status=200)
 
     def create(self, request):
@@ -178,7 +181,17 @@ class CourseRegistrationViewSet(ViewSet):
 
         return Response({"purchases": purchases_data})
     
-    
+    def retrieve(self, request, uuid):
+        admin = Admin.objects.filter(user_id=request.user.id).first()
+        if not admin:
+            return Response({"error": "Admin not found for the current user."}, status=404)
+
+        registration = CourseRegistration.objects.filter(course__school_id=admin.school.id, uuid=uuid).first()
+        if not registration:
+            return Response({"error": "Registration not found."}, status=404)
+        registration_detail = RegistrationDetailSerializer(registration)
+        return Response(registration_detail.data)
+
     def payment_validation(self, request, uuid):
         # Retrieve the Admin instance for the logged-in user
         admin = Admin.objects.filter(user_id=request.user.id).first()
@@ -222,6 +235,41 @@ class CourseRegistrationViewSet(ViewSet):
         else:
             send_notification(registration.student.user, "Payment Denied", f"Your payment status has been updated to {payment_status}.")
         return Response({"message": "Payment status and teacher updated successfully."}, status=200)
+    
+    def edit(self, request, uuid):
+        admin = Admin.objects.filter(user_id=request.user.id).first()
+        if not admin:
+            return Response({"error": "Admin not found for the current user."}, status=404)
+
+        registration = CourseRegistration.objects.filter(course__school_id=admin.school.id, uuid=uuid).first()
+        if not registration:
+            return Response({"error": "Registration not found."}, status=404)
+
+        teacher_uuid = request.data.get('teacher_uuid')
+        if teacher_uuid:
+            try:
+                teacher = Teacher.objects.get(user__uuid=teacher_uuid, school=admin.school)
+                registration.teacher = teacher
+            except Teacher.DoesNotExist:
+                return Response({"error": "Teacher not found or does not belong to the admin's school."}, status=404)
+
+        serializer = RegistrationDetailSerializer(registration, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def remove(self, request, uuid):
+        admin = Admin.objects.filter(user_id=request.user.id).first()
+        if not admin:
+            return Response({"error": "Admin not found for the current user."}, status=404)
+
+        registration = CourseRegistration.objects.filter(course__school_id=admin.school.id, uuid=uuid).first()
+        if not registration:
+            return Response({"error": "Registration not found."}, status=404)
+
+        registration.delete()
+        return Response({"message": "Registration removed successfully."}, status=status.HTTP_204_NO_CONTENT)
     
 class StaffViewSet(ViewSet):
     permission_classes = [IsAuthenticated, IsManager]
@@ -394,7 +442,56 @@ class StaffViewSet(ViewSet):
                 return Response({"error": "A unique constraint was violated."}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
             return Response({"error": "An error occurred while creating the client."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        
+    
+    def get_availables(self, request, uuid):
+        # Retrieve the Admin instance for the logged-in user
+        admin = Admin.objects.select_related('school').filter(user_id=request.user.id).first()
+        if not admin:
+            return Response({"error": "Admin not found for the current user."}, status=404)
+
+        # Retrieve the teacher by UUID and ensure they belong to the admin's school
+        teacher = Teacher.objects.prefetch_related(
+            Prefetch('unavailable_once', to_attr='cached_unavailables'),
+            Prefetch('lesson', queryset=Lesson.objects.filter(status__in=["CON", "PENTE"]), to_attr='cached_lessons'),
+            Prefetch('course', queryset=Course.objects.filter(is_group=False), to_attr='cached_courses'),
+            Prefetch('available_time', to_attr='cached_available_times'),  # Prefetch available times
+        ).filter(user__uuid=uuid, school_id=admin.school.id).first()
+
+        if not teacher:
+            return Response({"error": "Teacher not found."}, status=404)
+
+        # Extract date and duration from request data
+        date = request.data.get("date")
+        duration = request.data.get("lesson_duration")
+
+        if not date or not duration:
+            return Response({"error": "Date and duration are required."}, status=400)
+        try:
+            date = datetime.strptime(date, "%Y-%m-%d").date()
+        except ValueError:
+            return Response({"error": "Invalid date format. Use 'YYYY-MM-DD'."}, status=400)
+        try:
+            duration = int(duration)
+        except ValueError:
+            return Response({"error": "Invalid duration format. It should be an integer."}, status=400)
+
+        unavailables = teacher.cached_unavailables
+        lessons = teacher.cached_lessons
+        available_times = teacher.cached_available_times
+
+        interval = 30
+        gap = 15
+        availables = []
+
+        for available_time in available_times:
+            start = available_time.start
+            stop = available_time.stop
+            availables.extend(compute_available_time(
+                unavailables, lessons, date, start, stop, duration, interval, gap
+            ))
+
+        return Response(availables, status=200)
+    
 class ClientViewSet(ViewSet):
     permission_classes = [IsAuthenticated, IsManager]
 
@@ -589,13 +686,14 @@ class CourseViewset(ViewSet):
         serializer = CourseSerializer(courses, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
+
     def create(self, request):
         admin = Admin.objects.filter(user_id=request.user.id).first()
         if not admin:
             return Response({"error": "Admin not found for the current user."}, status=status.HTTP_404_NOT_FOUND)
 
         data = request.data.copy()  # Copy to avoid modifying the original request data
-        data['school'] = admin.school.id  # Set the school as the Admin's school
+        data['school_id'] = admin.school.id  # Set the school as the Admin's school
 
         # Pass the updated data to the serializer
         serializer = CourseSerializer(data=data, context={'request': request})
@@ -606,6 +704,47 @@ class CourseViewset(ViewSet):
         
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+    def retrieve(self, request, uuid):
+        admin = Admin.objects.filter(user_id=request.user.id).first()
+        if not admin:
+            return Response({"error": "Admin not found for the current user."}, status=404)
+
+        course = Course.objects.filter(uuid=uuid, school_id=admin.school.id).first()
+        if not course:
+            return Response({"error": "Course not found."}, status=404)
+
+        serializer = CourseDetailSerializer(course)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    def edit(self, request, uuid):
+        admin = Admin.objects.filter(user_id=request.user.id).first()
+        if not admin:
+            return Response({"error": "Admin not found for the current user."}, status=404)
+
+        course = Course.objects.filter(uuid=uuid, school_id=admin.school.id).first()
+        if not course:
+            return Response({"error": "Course not found."}, status=404)
+
+        serializer = CourseDetailSerializer(course, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def destroy(self, request, uuid):
+        admin = Admin.objects.filter(user_id=request.user.id).first()
+        if not admin:
+            return Response({"error": "Admin not found for the current user."}, status=404)
+
+        course = Course.objects.filter(uuid=uuid, school_id=admin.school.id).first()
+        if not course:
+            return Response({"error": "Course not found."}, status=404)
+        
+        try:
+            course.delete()
+        except ProtectedError:
+            return Response({"error": "Cannot delete a course with active registrations."}, status=400)
+        return Response({"message": "Course deleted successfully."}, status=status.HTTP_204_NO_CONTENT)
 
 class AvailableTimeViewSet(ViewSet):
     def list(self, request, uuid=None):

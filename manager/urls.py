@@ -22,6 +22,12 @@ registrationViewSet = views.CourseRegistrationViewSet.as_view({
     'get': "list"
 })
 
+registrationDetailViewSet = views.CourseRegistrationViewSet.as_view({
+    'get': "retrieve",
+    "put": "edit",
+    "delete": "remove"
+})
+
 paymentViewset = views.CourseRegistrationViewSet.as_view({
     'put': "payment_validation"
 })
@@ -38,6 +44,10 @@ staffDetailViewSet = views.StaffViewSet.as_view({
 
 staffClientViewSet = views.StaffViewSet.as_view({
     'get': "client"
+})
+
+staffAvailableViewSet = views.StaffViewSet.as_view({
+    'get': "get_availables"
 })
 
 availableTimeViewSet = views.AvailableTimeViewSet.as_view({
@@ -66,6 +76,12 @@ courseViewSet = views.CourseViewset.as_view({
     'post': 'create'
 })
 
+courseDetailViewSet = views.CourseViewset.as_view({
+    'get': 'retrieve',
+    'put': 'edit',
+    'delete': 'destroy'
+})
+
 bookingViewSet = views.BookingViewSet.as_view({
     'put': 'check_in',
 })
@@ -92,18 +108,21 @@ urlpatterns = format_suffix_patterns([
     path('lesson/<slug:code>/cancel', lessonCancelViewSet, name='lesson-cancel'),
 
     path('purchase', registrationViewSet, name='purchase'),
+    path('purchase/<slug:uuid>', registrationDetailViewSet, name='purchase'),
     path('purchase/<slug:uuid>/payment-validation', paymentViewset, name='purchase'),
 
     path('staff', staffViewSet, name='staff-list'),
     path('staff/<slug:uuid>', staffDetailViewSet, name='staff-detail'),
     path('staff/<slug:uuid>/client', staffClientViewSet, name='staff-client'),
     path('staff/<slug:uuid>/available-time', availableTimeViewSet, name='client-registration'),
+    path('staff/<slug:uuid>/available', staffAvailableViewSet, name='client-registration'),
 
     path('client', clientViewSet, name='client'),
     path('client/<slug:uuid>', clientDetailViewSet, name='client-detail'),
     path('client/<slug:uuid>/registration', clientRegistrationViewSet, name='client-registration'),
 
     path('course', courseViewSet, name='course'),
+    path('course/<slug:uuid>', courseDetailViewSet, name='course-detail'),
 
     path('booking/<slug:code>/clear', bookingClearViewSet, name='booking-check-in'),
     path('booking/<slug:code>/check-in', bookingViewSet, name='booking-check-in'),

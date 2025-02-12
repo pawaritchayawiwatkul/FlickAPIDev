@@ -99,7 +99,8 @@ class CourseSerializer(serializers.ModelSerializer):
     is_group = serializers.BooleanField(default=False)
     image = serializers.FileField(required=True)
     price = serializers.FloatField(required=True)
-    
+    school_id = serializers.UUIDField(write_only=True)  # Add school field
+
     class Meta:
         model = Course
         fields = (
@@ -112,7 +113,7 @@ class CourseSerializer(serializers.ModelSerializer):
             'number_of_lessons', 
             'is_group',
             'image',
-            'school',
+            'school_id',
             'uuid'
         )
         read_only_fields = ('uuid',)
@@ -130,58 +131,32 @@ class CourseSerializer(serializers.ModelSerializer):
             })
         return attrs
     
-# class CourseSerializer(serializers.ModelSerializer):
-#     class Meta:
-#         model = Course
-#         fields = [
-#             'name', 
-#             'description', 
-#             'uuid', 
-#             'no_exp', 
-#             'exp_range', 
-#             'duration', 
-#             'number_of_lessons', 
-#             'created_date',
-#             'school',
-#             'price',
-#             'is_group',
-#             'group_size'
-#         ]
-#         read_only_fields = ['uuid']
-#         extra_kwargs = {
-#             'school': {'required': True, 'write_only': True},
-#         }
+class CourseDetailSerializer(serializers.ModelSerializer):
+    name = serializers.CharField(max_length=100)
+    description = serializers.CharField(max_length=300, required=False)
+    no_exp = serializers.BooleanField(default=True)
+    exp_range = serializers.IntegerField(required=False)
+    duration = serializers.IntegerField()
+    number_of_lessons = serializers.IntegerField()
+    image = serializers.FileField(required=True)
+    price = serializers.FloatField(required=True)
+    created_date = serializers.DateField(read_only=True)  # Make created_date read-only
 
-#     def validate(self, data):
-#         # Ensure the 'exp_range' is a positive integer
-#         if data.get('exp_range') <= 0:
-#             raise serializers.ValidationError({"exp_range": "This field must be a positive integer."})
-        
-#         # Validate 'duration' to be a positive integer
-#         if data.get('duration') <= 0:
-#             raise serializers.ValidationError({"duration": "This field must be a positive integer."})
-        
-#         # Validate 'number_of_lessons' to be a positive integer
-#         if data.get('number_of_lessons') <= 0:
-#             raise serializers.ValidationError({"number_of_lessons": "This field must be a positive integer."})
-        
-#         return data
-
-#     def create(self, validated_data):
-#         # Create the Course instance using validated data
-#         course = Course.objects.create(
-#             name=validated_data['name'],
-#             description=validated_data['description'],
-#             no_exp=validated_data['no_exp'],
-#             exp_range=validated_data['exp_range'],
-#             duration=validated_data['duration'],
-#             number_of_lessons=validated_data['number_of_lessons'],
-#             school=validated_data['school'],
-#             price=validated_data['price'],
-#             is_group=validated_data.get('is_group', False),
-#             group_size=validated_data.get('group_size', None) if validated_data.get('is_group', False) else None
-#         )
-#         return course
+    class Meta:
+        model = Course
+        fields = (
+            'name', 
+            'description', 
+            'price',
+            'no_exp', 
+            'exp_range', 
+            'duration', 
+            'created_date',
+            'number_of_lessons', 
+            'image',
+            'uuid'
+        )
+        read_only_fields = ('uuid', 'created_date')  # Ensure created_date is read-only
 
 class SchoolAnalyticsSerializer(serializers.ModelSerializer):
     earnings_amount = serializers.SerializerMethodField()
@@ -219,6 +194,33 @@ class PurchaseSerializer(serializers.ModelSerializer):
     def get_amount(self, obj):
         return f"${obj.paid_price:.2f}" if obj.paid_price else 0.0
 
+class RegistrationDetailSerializer(serializers.ModelSerializer):
+    course_name = serializers.CharField(source='course.name', read_only=True)
+    paid_price = serializers.FloatField()
+    discount = serializers.FloatField()
+    lessons_left = serializers.IntegerField()
+    exp_date = serializers.DateField()
+    student_name = serializers.CharField(source='student.user.get_full_name', read_only=True)
+    teacher_name = serializers.CharField(source='teacher.user.get_full_name', read_only=True)
+    teacher_uuid = serializers.UUIDField(source='teacher.user.uuid', read_only=True)
+    payment_slip = serializers.ImageField()
+
+    class Meta:
+        model = CourseRegistration
+        fields = [
+            'uuid',
+            'student_name',
+            'course_name',
+            'paid_price',
+            'discount',
+            'lessons_left',
+            'exp_date',
+            'teacher_name',
+            'teacher_uuid',
+            'payment_slip',
+            'payment_status',
+        ]
+    
 class TeacherSerializer(serializers.ModelSerializer):
     profile_picture = serializers.SerializerMethodField()
     available_times = serializers.JSONField()  # Add available_times field
@@ -290,18 +292,21 @@ class CreateLessonSerializer(serializers.ModelSerializer):
     datetime = serializers.DateTimeField()
     student_uuid = serializers.UUIDField(write_only=True, required=True)
     registration_uuid = serializers.UUIDField(write_only=True, required=True)
+    teacher_uuid = serializers.UUIDField(write_only=True, required=True)  # Add teacher_uuid field
 
     class Meta:
         model = Lesson
         fields = [
             "datetime", 
             "student_uuid", 
-            "registration_uuid"
+            "registration_uuid",
+            "teacher_uuid"  # Include teacher_uuid
         ]
 
     def create(self, validated_data):
         student_uuid = validated_data.pop('student_uuid')
         registration_uuid = validated_data.pop('registration_uuid')
+        teacher_uuid = validated_data.pop('teacher_uuid')  # Retrieve teacher_uuid
 
         try:
             student = Student.objects.get(user__uuid=student_uuid)
@@ -314,12 +319,18 @@ class CreateLessonSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({"registration_uuid": "Registration with this UUID does not exist."})
 
         try:
+            teacher = Teacher.objects.get(user__uuid=teacher_uuid)
+        except Teacher.DoesNotExist:
+            raise serializers.ValidationError({"teacher_uuid": "Teacher with this UUID does not exist."})
+
+        try:
             lesson = Lesson.objects.create(
                 status='CON', 
                 course=registration.course,  # Set course to registration.course
                 datetime=validated_data['datetime'],
                 end_datetime=validated_data['datetime'] + timedelta(minutes=registration.course.duration),
                 number_of_client=1,
+                teacher=teacher  # Assign teacher to the lesson
             )
         except Exception as e:
             raise serializers.ValidationError({"lesson_creation": str(e)})

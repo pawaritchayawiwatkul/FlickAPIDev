@@ -207,7 +207,7 @@ class LessonViewSet(ViewSet):
              Prefetch('teacher', 
                 queryset=Teacher.objects.prefetch_related(
                 Prefetch('unavailable_once', to_attr='cached_unavailables'),
-                Prefetch('lesson', queryset=Lesson.objects.filter(status__in=["CON", "CAN", "PENTE"]),to_attr='cached_lessons'),
+                Prefetch('lesson', queryset=Lesson.objects.filter(status__in=["CON", "PENTE"]),to_attr='cached_lessons'),
                 Prefetch('course',
                     queryset=Course.objects.filter(is_group=False), to_attr='cached_courses'),
                 Prefetch('available_time', to_attr='cached_available_times'),  # Prefetch available times
