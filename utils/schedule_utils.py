@@ -5,6 +5,7 @@ import bisect
 import string
 import random
 
+
 gmt7 = pytz.timezone('Asia/Bangkok')
 
 
@@ -81,9 +82,8 @@ def compute_available_time(unavailables, lessons, date, start, stop, duration, i
 
         current_time += interval_td
     # Print start, stop, and unavailables if start is 17th February
-    if date == datetime(2025, 2, 17).date():
-        print(f"Una: {unavailable_intervals}, \n\nLessons: {lesson_intervals}, \n\nAvailables: {available_times}")
-    print()
+    # if date == datetime(2025, 2, 17).date():
+    #     print(f"Una: {unavailable_intervals}, \n\nLessons: {lesson_intervals}, \n\nAvailables: {available_times}")
     return available_times
 
 def generate_unique_code(existing_codes, length=8):
@@ -94,3 +94,4 @@ def generate_unique_code(existing_codes, length=8):
         if code not in existing_codes:
             existing_codes.add(code)  # Append new code to prevent duplicates
             return code
+    

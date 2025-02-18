@@ -3,7 +3,7 @@ from rest_framework.viewsets import ViewSet
 from rest_framework.response import Response
 from django.db.models import Prefetch, Sum, Count
 from django.db.models.deletion import ProtectedError
-from datetime import datetime, timedelta
+from datetime import datetime
 from student.models import Lesson, CourseRegistration, StudentTeacherRelation, Student, Booking
 from school.models import School, Course  # Ensure Admin model is imported
 from teacher.models import Teacher, AvailableTime
@@ -17,6 +17,7 @@ from manager.serializers import (
     PurchaseSerializer, 
     AvailableTimeSerializer, 
     LessonSerializer,
+    EditLessonSerializer,
     ProfileSerializer  # Add this import
 )
 from core.serializers import CreateUserSerializer, UserUpdateSerializer
@@ -142,6 +143,21 @@ class LessonViewSet(ViewSet):
         lesson.save()
         return Response({"message": "Lesson cancelled successfully."}, status=200)
 
+    def edit(self, request, code):
+        if not code:
+            return Response({"error": "Lesson UUID is required."}, status=400)
+
+        try:
+            lesson = Lesson.objects.get(code=code)
+        except Lesson.DoesNotExist:
+            return Response({"error": "Lesson not found."}, status=404)
+
+        serializer = EditLessonSerializer(lesson, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.validated_data, status=200)
+        return Response(serializer.errors, status=400)
+    
 class CourseRegistrationViewSet(ViewSet):
     permission_classes = [IsAuthenticated, IsManager]
 
@@ -158,7 +174,7 @@ class CourseRegistrationViewSet(ViewSet):
                 queryset=Course.objects.prefetch_related(
                     Prefetch(
                         "registration",  # Prefetch registrations related to each course
-                        queryset=CourseRegistration.objects.select_related("student__user"),
+                        queryset=CourseRegistration.objects.select_related("student__user", "teacher__user", "course"),
                         to_attr="prefetched_registrations",  # Store prefetched registrations in this attribute
                     )
                 ),
@@ -186,7 +202,11 @@ class CourseRegistrationViewSet(ViewSet):
         if not admin:
             return Response({"error": "Admin not found for the current user."}, status=404)
 
-        registration = CourseRegistration.objects.filter(course__school_id=admin.school.id, uuid=uuid).first()
+        registration = CourseRegistration.objects.select_related(
+            "course",
+            "student__user",
+            "teacher__user"
+        ).filter(course__school_id=admin.school.id, uuid=uuid).first()
         if not registration:
             return Response({"error": "Registration not found."}, status=404)
         registration_detail = RegistrationDetailSerializer(registration)
@@ -449,25 +469,14 @@ class StaffViewSet(ViewSet):
         if not admin:
             return Response({"error": "Admin not found for the current user."}, status=404)
 
-        # Retrieve the teacher by UUID and ensure they belong to the admin's school
-        teacher = Teacher.objects.prefetch_related(
-            Prefetch('unavailable_once', to_attr='cached_unavailables'),
-            Prefetch('lesson', queryset=Lesson.objects.filter(status__in=["CON", "PENTE"]), to_attr='cached_lessons'),
-            Prefetch('course', queryset=Course.objects.filter(is_group=False), to_attr='cached_courses'),
-            Prefetch('available_time', to_attr='cached_available_times'),  # Prefetch available times
-        ).filter(user__uuid=uuid, school_id=admin.school.id).first()
-
-        if not teacher:
-            return Response({"error": "Teacher not found."}, status=404)
-
         # Extract date and duration from request data
-        date = request.data.get("date")
-        duration = request.data.get("lesson_duration")
+        date = request.GET.get("date")
+        duration = request.GET.get("lesson_duration")
 
         if not date or not duration:
             return Response({"error": "Date and duration are required."}, status=400)
         try:
-            date = datetime.strptime(date, "%Y-%m-%d").date()
+            date = datetime.strptime(date, "%Y-%m-%d")
         except ValueError:
             return Response({"error": "Invalid date format. Use 'YYYY-MM-DD'."}, status=400)
         try:
@@ -475,10 +484,21 @@ class StaffViewSet(ViewSet):
         except ValueError:
             return Response({"error": "Invalid duration format. It should be an integer."}, status=400)
 
+        # Retrieve the teacher by UUID and ensure they belong to the admin's school
+        teacher = Teacher.objects.prefetch_related(
+            Prefetch('unavailable_once', to_attr='cached_unavailables'),
+            Prefetch('lesson', queryset=Lesson.objects.filter(status__in=["CON", "PENTE"]), to_attr='cached_lessons'),
+            Prefetch('course', queryset=Course.objects.filter(is_group=False), to_attr='cached_courses'),
+            Prefetch('available_time', queryset=AvailableTime.objects.filter(day=str(date.weekday() + 1)), to_attr='cached_available_times'),  # Prefetch available times
+        ).filter(user__uuid=uuid, school_id=admin.school.id).first()
+
+        if not teacher:
+            return Response({"error": "Teacher not found."}, status=404)
+        
         unavailables = teacher.cached_unavailables
         lessons = teacher.cached_lessons
         available_times = teacher.cached_available_times
-
+        print(available_times)
         interval = 30
         gap = 15
         availables = []
@@ -487,7 +507,7 @@ class StaffViewSet(ViewSet):
             start = available_time.start
             stop = available_time.stop
             availables.extend(compute_available_time(
-                unavailables, lessons, date, start, stop, duration, interval, gap
+                unavailables, lessons, date.date(), start, stop, duration, interval, gap
             ))
 
         return Response(availables, status=200)
@@ -573,7 +593,7 @@ class ClientViewSet(ViewSet):
         
         try:
             # Create the User instance
-            user = user_serializer.save(is_teacher=True, is_admin=False)
+            user = user_serializer.save(is_teacher=False, is_admin=False)
 
             # Create the Teacher instance and associate with the School
             student = Student.objects.create(user=user)
@@ -637,7 +657,7 @@ class ClientViewSet(ViewSet):
             student = Student.objects.prefetch_related(
                 Prefetch(
                     "registration",
-                    queryset=CourseRegistration.objects.select_related("course"),
+                    queryset=CourseRegistration.objects.select_related("course", "teacher__user"),
                     to_attr="registrations"
                 )
             ).get(user__uuid=uuid, school=admin.school)
@@ -655,7 +675,10 @@ class ClientViewSet(ViewSet):
                 "course_name": registration.course.name,
                 "registration_date": registration.registered_date,
                 "paid_price": registration.paid_price,
-                "lessons_left": registration.lessons_left
+                "lesson_duration": registration.course.duration,
+                "lessons_left": registration.lessons_left,
+                "teacher_name": registration.teacher.user.get_full_name() if registration.teacher else None,
+                "teacher_uuid": registration.teacher.user.uuid if registration.teacher else None,
             })
 
         return Response({"registrations": registrations})
@@ -834,7 +857,33 @@ class AvailableTimeViewSet(ViewSet):
 
 class BookingViewSet(ViewSet):
     permission_classes = [IsAuthenticated, IsManager]
-
+    
+    def missed(self, request, code=None):
+        missed = request.data.get("missed")
+        if missed is None:
+            return Response({"error": "Missed status is required."}, status=status.HTTP_400_BAD_REQUEST)
+        if missed not in [True, False]:
+            return Response({"error": "Invalid missed status. Use 'true' or 'false'."}, status=status.HTTP_400_BAD_REQUEST)
+        if missed:
+            try:
+                booking = Booking.objects.get(code=code)
+            except Booking.DoesNotExist:
+                return Response({"error": "Booking not found."}, status=status.HTTP_404_NOT_FOUND)
+            booking.registration.lessons_left -= 1
+            booking.registration.save()
+            booking.status = "MIS"
+            booking.save()
+        else:
+            try:
+                booking = Booking.objects.get(code=code)
+            except Booking.DoesNotExist:
+                return Response({"error": "Booking not found."}, status=status.HTTP_404_NOT_FOUND)
+            booking.registration.lessons_left += 1
+            booking.registration.save()
+            booking.status = "CON"
+            booking.save()
+        return Response({"message": "Booking marked as missed."}, status=status.HTTP_200_OK)
+    
     def check_in(self, request, code=None):
         try:
             booking = Booking.objects.get(code=code)
@@ -875,6 +924,8 @@ class BookingViewSet(ViewSet):
         if not booking.check_out:
             booking.registration.lessons_left -= 1
             booking.registration.save()
+        booking.lesson.status = "COM"
+        booking.lesson.save()
         booking.check_out = check_out_time
         booking.save()
         return Response({"message": "Check-out successful."}, status=status.HTTP_200_OK)
@@ -888,6 +939,8 @@ class BookingViewSet(ViewSet):
         if booking.check_out:
             booking.registration.lessons_left += 1
             booking.registration.save()
+            booking.lesson.status = "CON"
+            booking.lesson.save()
         booking.check_in = None
         booking.check_out = None
         booking.save()

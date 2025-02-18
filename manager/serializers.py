@@ -192,7 +192,7 @@ class PurchaseSerializer(serializers.ModelSerializer):
         ]
 
     def get_amount(self, obj):
-        return f"${obj.paid_price:.2f}" if obj.paid_price else 0.0
+        return f"฿{obj.paid_price:.2f}" if obj.paid_price else 0.0
 
 class RegistrationDetailSerializer(serializers.ModelSerializer):
     course_name = serializers.CharField(source='course.name', read_only=True)
@@ -343,3 +343,48 @@ class CreateLessonSerializer(serializers.ModelSerializer):
             status='COM'
         )
         return lesson
+
+class EditLessonSerializer(serializers.ModelSerializer):
+    datetime = serializers.DateTimeField(required=False)
+    student_uuid = serializers.UUIDField(write_only=True, required=False)
+    registration_uuid = serializers.UUIDField(write_only=True, required=False)
+    teacher_uuid = serializers.UUIDField(write_only=True, required=False)  # Add teacher_uuid field
+
+    class Meta:
+        model = Lesson
+        fields = [
+            "datetime", 
+            "student_uuid", 
+            "registration_uuid",
+            "teacher_uuid"  # Include teacher_uuid
+        ]
+
+    def update(self, instance, validated_data):
+        student_uuid = validated_data.pop('student_uuid', None)
+        registration_uuid = validated_data.pop('registration_uuid', None)
+        teacher_uuid = validated_data.pop('teacher_uuid', None)
+
+        if student_uuid:
+            try:
+                student = Student.objects.get(user__uuid=student_uuid)
+            except Student.DoesNotExist:
+                raise serializers.ValidationError({"student_uuid": "Student with this UUID does not exist."})
+            instance.student = student
+
+        if registration_uuid:
+            try:
+                registration = CourseRegistration.objects.get(uuid=registration_uuid)
+            except CourseRegistration.DoesNotExist:
+                raise serializers.ValidationError({"registration_uuid": "Registration with this UUID does not exist."})
+            instance.registration = registration
+
+        if teacher_uuid:
+            try:
+                teacher = Teacher.objects.get(user__uuid=teacher_uuid)
+            except Teacher.DoesNotExist:
+                raise serializers.ValidationError({"teacher_uuid": "Teacher with this UUID does not exist."})
+            instance.teacher = teacher
+
+        instance.datetime = validated_data.get('datetime', instance.datetime)
+        instance.save()
+        return instance

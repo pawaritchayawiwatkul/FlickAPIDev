@@ -17,8 +17,8 @@ from teacher.v2.serializers import (
     ListStudentSerializer, ProfileSerializer,
     LessonDetailSerializer, ListLessonSerializer,
     ListBookingSerializer, 
-    CreateUnavailableTimeOneTimeSerializer, CreateUnavailableTimeRegularSerializer,
-    ListUnavailableTimeOneTimeSerializer, ListUnavailableTimeRegularSerializer
+    CreateUnavailableTimeOneTimeSerializer, 
+    ListUnavailableTimeOneTimeSerializer
 )
 from student.models import Student, StudentTeacherRelation, CourseRegistration, Lesson, Booking
 from school.models import Course

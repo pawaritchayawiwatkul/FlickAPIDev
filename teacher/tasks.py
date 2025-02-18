@@ -19,51 +19,40 @@ def send_lesson_notification():
     upcoming_lessons = list(Lesson.objects.select_related("teacher__user").prefetch_related(
        Prefetch("booking", queryset=Booking.objects.select_related("student__user").filter(status='COM'), to_attr="cached_booking")
     ).filter(
-        booked_datetime__gte=now,
-        booked_datetime__lte=end_time,
+        # datetime__gte=now,
+        datetime__lte=end_time,
         status='CON',
         notified=False
     ))
     if upcoming_lessons:
         for lesson in upcoming_lessons:
             gmt_time = lesson.datetime.astimezone(gmt7)
-            send_notification(
-                lesson.teacher.user_id, 
-                "Lesson Notification",  
-                f'You have a lesson with {lesson.registration.student.user.first_name} on {gmt_time.strftime("%Y-%m-%d")} at {gmt_time.strftime("%H:%M")}.')
-            for booking in lesson.cached_booking:
-                send_mail(
-                    "Lesson Notification", 
-                    f'You have a lesson with {booking.student.user.first_name} on {gmt_time.strftime("%Y-%m-%d")} at {gmt_time.strftime("%H:%M")}.',
-                )
+            if lesson.teacher:
+                if not lesson.course.is_group:
+                    send_notification(
+                        lesson.teacher.user_id, 
+                        "Lesson Notification",  
+                        f'You have a lesson with {lesson.cached_booking[0].student.user.first_name} on {gmt_time.strftime("%Y-%m-%d")} at {gmt_time.strftime("%H:%M")}.')
+                else:
+                    send_notification(
+                        lesson.teacher.user_id, 
+                        "Lesson Notification",  
+                        f'You have a lesson on {gmt_time.strftime("%Y-%m-%d")} at {gmt_time.strftime("%H:%M")}.'
+                    )
+                for booking in lesson.cached_booking:
+                    send_notification(
+                        booking.student.user_id,
+                        "Lesson Notification", 
+                        f'You have a lesson with {lesson.teacher.user.first_name} on {gmt_time.strftime("%Y-%m-%d")} at {gmt_time.strftime("%H:%M")}.',
+                    )
+            else:
+                for booking in lesson.cached_booking:
+                    send_notification(
+                        booking.student.user_id,
+                        "Lesson Notification", 
+                        f'You have a lesson on {gmt_time.strftime("%Y-%m-%d")} at {gmt_time.strftime("%H:%M")}.',
+                    )
             lesson.notified = True
             
         Lesson.objects.bulk_update(upcoming_lessons, fields=["notified"])
     return len(upcoming_lessons)
-
-# @shared_task(base=Singleton)
-# def send_guest_lesson_notification():
-#     now = timezone.now()
-#     end_time = now + timedelta(minutes=60)
-#     upcoming_guest_lessons = list(GuestLesson.objects.select_related("teacher__user").filter(
-#         datetime__gte=now,
-#         datetime__lte=end_time,
-#         status='CON',
-#         notified=False
-#     ))
-#     if upcoming_guest_lessons:
-#         for lesson in upcoming_guest_lessons:
-#             gmt_time = lesson.datetime.astimezone(gmt7)
-#             send_notification(
-#                 lesson.teacher.user_id, 
-#                 "Lesson Notification",  
-#                 f'You have a lesson with {lesson.name} on {gmt_time.strftime("%Y-%m-%d")} at {gmt_time.strftime("%H:%M")}.')
-#             send_mail(
-#                 "Lesson Notification", 
-#                 f'You have a lesson with {lesson.teacher.user.first_name} on {gmt_time.strftime("%Y-%m-%d")} at {gmt_time.strftime("%H:%M")}.',
-#                 "hello.timeable@gmail.com", 
-#                 [lesson.email], 
-#                 fail_silently=True)
-#             lesson.notified = True
-            
-#         GuestLesson.objects.bulk_update(upcoming_guest_lessons, fields=["notified"])

@@ -107,6 +107,7 @@ class Booking(models.Model):
     STATUS_CHOICES = [
         ('COM', 'Completed'),
         ('CAN', 'Canceled'),
+        ('MIS', 'Missed'),
     ]
 
     code = models.CharField(max_length=12, unique=True)

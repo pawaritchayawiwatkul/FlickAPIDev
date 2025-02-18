@@ -31,6 +31,18 @@ activate(TIME_ZONE)
 
 CORS_ORIGIN_ALLOW_ALL = True
 
+if not DEBUG:
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.filebased.FileBasedCache",
+            "LOCATION": "/var/tmp/django_cache",  # Choose a directory with write access
+            "TIMEOUT": 600,  # Cache timeout in seconds (10 minutes)
+            "OPTIONS": {
+                "MAX_ENTRIES": 1000,  # Limit number of cache entries
+            },
+        }
+    }
+
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
@@ -301,21 +313,16 @@ from celery.schedules import schedule
 
 
 CELERY_BEAT_SCHEDULE = {
-    # 'send-lesson-notification-every-15-minutes': {
-    #     'task': 'teacher.tasks.send_lesson_notification',
-    #     'schedule': crontab(minute='*/15'),  # Executes every 15 minutes
-    #     'args': (),
-    # },
+    'send-lesson-notification-every-15-minutes': {
+        'task': 'teacher.tasks.send_lesson_notification',
+        'schedule': crontab(minute='*/15'),  # Executes every 15 minutes
+        'args': (),
+    },
     # 'send-guest-notification-every-15-minutes': {
     #     'task': 'teacher.tasks.send_guest_lesson_notification',
     #     'schedule': crontab(minute='*/15'),  # Executes every 15 minutes
     #     'args': (),
     # },
-    'generate-upcoming-lessons-every-day': {
-        'task': 'manager.tasks.generate_upcoming_lessons',
-        'schedule': crontab(hour=3, minute=5),  # Executes every day at 00:01
-        'args': (),
-    },
 }
 
 DEBUG = True

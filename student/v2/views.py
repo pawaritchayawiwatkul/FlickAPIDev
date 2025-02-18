@@ -4,9 +4,6 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
 from django.db.models import Q, F, Prefetch
-from functools import reduce
-from operator import or_
-from manager.tasks import generate_upcoming_private
 from manager.models import Admin
 from student.models import CourseRegistration, Student, StudentTeacherRelation, Booking
 from teacher.models import Teacher, Lesson
@@ -23,10 +20,11 @@ from student.v2.serializers import (
     BookingDetailSerializer
 )
 from django.core.exceptions import ValidationError
-from school.models import School
+from school.models import School, SchoolSettings
 from core.serializers import ProfileSerializer
 from internal.permissions import IsStudent
 from utils.notification_utils import send_notification
+from utils.gen_upcomming import generate_upcoming_private
 from datetime import datetime, timedelta
 import pytz
 from django.utils import timezone
@@ -411,10 +409,17 @@ class BookingViewSet(ViewSet):
         booking.save()
 
         lesson = booking.lesson
+        lesson.number_of_client -= 1
         if not lesson.course.is_group:
             lesson.status = "CAN"
-            lesson.save()
+        lesson.save()
 
+        settings = SchoolSettings.objects.select_related("settings").get(school_id=student.school.first().id)
+        cancel_b4_hours = settings.cancel_b4_hours
+        if lesson.datetime - timedelta(hours=cancel_b4_hours) < timezone.now():
+            if booking.registration.lessons_left > 0:  # Prevent negative balance
+                booking.registration.lessons_left -= 1
+                booking.registration.save()
         send_notification(lesson.teacher.user, "Class Cancellation", f"{request.user.first_name} has canceled a class with you. Check your schedule for details.")
 
         return Response({"message": "Booking canceled successfully."}, status=200)

@@ -136,7 +136,7 @@ class Lesson(models.Model):
         return code
 
     def check_for_conflicts(self):
-        """Check for conflicting lessons when status is changed to 'CON'."""
+        """Check for conflicting lessons when status is changed to 'PENTE'."""
         if not self.course.is_group:
             conflicting_lessons = Lesson.objects.filter(
                 teacher=self.teacher,
@@ -148,12 +148,35 @@ class Lesson(models.Model):
             if conflicting_lessons.exists():
                 raise ValidationError("There is a conflicting lesson during this time.")
 
+    def check_available_time(self):
+        """Check if the lesson is within the teacher's available time."""
+        lesson_day = self.datetime.strftime('%w')  # Get the day of the week as a string
+        available_times = AvailableTime.objects.filter(
+            teacher=self.teacher,
+            day=lesson_day,
+            start__lte=self.datetime.time(),
+            stop__gte=self.end_datetime.time()
+        )
+        if not available_times.exists():
+            raise ValidationError("The lesson is not within the teacher's available time.")
+
+    def check_unavailable_time(self):
+        """Check if the lesson conflicts with the teacher's unavailable times."""
+        conflicting_unavailable_times = UnavailableTimeOneTime.objects.filter(
+            teacher=self.teacher,
+            date=self.datetime.date(),
+            start__lt=self.end_datetime.time(),
+            stop__gt=self.datetime.time()
+        ) 
+        if conflicting_unavailable_times.exists():
+            raise ValidationError("The lesson conflicts with the teacher's unavailable times.")
+
     def save(self, *args, **kwargs):
         with transaction.atomic():  # Ensure database consistency
             if not self.code:
                 self.code = self._generate_unique_code(12)
 
-            # Check if the status is changing to 'CON'
+            # Check if the status is changing to 'PENTE'
             if self.pk is None:
                 status_changed_to_pending = True
             elif self.status != 'PENTE':
@@ -164,5 +187,7 @@ class Lesson(models.Model):
 
             if status_changed_to_pending:
                 self.check_for_conflicts()  # Check for conflicts before saving
+                self.check_available_time()  # Check if the lesson is within available time
+                self.check_unavailable_time()  # Check if the lesson conflicts with unavailable times
                 
             super(Lesson, self).save(*args, **kwargs)
