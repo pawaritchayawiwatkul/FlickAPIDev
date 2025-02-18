@@ -10,7 +10,8 @@ class SchoolSettings(models.Model):
     school = models.OneToOneField("School", on_delete=models.CASCADE, related_name="settings")
     days_ahead = models.PositiveIntegerField(default=21)
     interval = models.PositiveIntegerField(default=30)
-
+    cancel_b4_hours = models.PositiveIntegerField(default=24)
+    
     def __str__(self):
         return f"Schedule Settings for {self.school.name}"
 

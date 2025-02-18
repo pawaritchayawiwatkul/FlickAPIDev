@@ -6,10 +6,13 @@ import string
 from utils.schedule_utils import compute_available_time
 import uuid
 from django.core.exceptions import ValidationError
-from datetime import datetime, timedelta
+from datetime import timezone
+import pytz
+
 # Create your models here.
 
-    
+gmt7 = pytz.timezone("Asia/Bangkok")  # GMT+7 (Example: Thailand)
+
 class Teacher(models.Model):
     user = models.OneToOneField(User, models.CASCADE)
     school = models.ForeignKey(School, models.CASCADE, related_name="teacher")
@@ -144,19 +147,23 @@ class Lesson(models.Model):
                 datetime__lt=self.end_datetime,  # Existing lesson starts before new lesson ends
                 end_datetime__gt=self.datetime  # Existing lesson ends after new lesson starts
             )
-            print("conflicting_lessons", conflicting_lessons)  
             if conflicting_lessons.exists():
                 raise ValidationError("There is a conflicting lesson during this time.")
 
     def check_available_time(self):
         """Check if the lesson is within the teacher's available time."""
-        lesson_day = self.datetime.strftime('%w')  # Get the day of the week as a string
+        lesson_day = str(self.datetime.weekday() + 1)
+        # Convert lesson times to GMT
+        lesson_start_gmt = self.datetime.astimezone(gmt7).time()
+        lesson_end_gmt = self.end_datetime.astimezone(gmt7).time()
+        
         available_times = AvailableTime.objects.filter(
             teacher=self.teacher,
             day=lesson_day,
-            start__lte=self.datetime.time(),
-            stop__gte=self.end_datetime.time()
+            start__lte=lesson_start_gmt,
+            stop__gte=lesson_end_gmt
         )
+        print(available_times)
         if not available_times.exists():
             raise ValidationError("The lesson is not within the teacher's available time.")
 

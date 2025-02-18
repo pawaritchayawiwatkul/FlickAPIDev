@@ -29,6 +29,7 @@ from datetime import datetime, timedelta
 import pytz
 from django.utils import timezone
 from datetime import timedelta
+from django.utils.dateparse import parse_datetime
 
 gmt7 = pytz.timezone('Asia/Bangkok')
 
@@ -336,8 +337,7 @@ class BookingViewSet(ViewSet):
             # Validate datetime
             try:
                 booking_datetime = lesson_data.get("datetime")
-                lesson_datetime = timezone.datetime.fromisoformat(booking_datetime
-                )
+                lesson_datetime = parse_datetime(booking_datetime)
             except (TypeError, ValueError):
                 return Response({"error": "Invalid datetime format."}, status=400)
 
