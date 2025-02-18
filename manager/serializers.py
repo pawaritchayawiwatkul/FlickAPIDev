@@ -259,7 +259,7 @@ class BookingSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Booking
-        fields = ["student_name", "code",  "check_in", "check_out"]
+        fields = ["student_name", "code",  "check_in", "check_out", "status"]
 
 
 class LessonSerializer(serializers.ModelSerializer):

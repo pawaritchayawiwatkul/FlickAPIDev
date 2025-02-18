@@ -80,6 +80,7 @@ class CourseRegistrationSerializer(serializers.ModelSerializer):
         course_uuid = attrs.pop("course_uuid")
         try:
             course = Course.objects.get(uuid=course_uuid)
+            attrs['paid_price'] = course.price
             attrs['course_id'] = course.id
             attrs['lessons_left'] = course.number_of_lessons
             attrs['course'] = course  # Add course to attrs for use in create method

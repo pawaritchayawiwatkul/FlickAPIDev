@@ -147,23 +147,26 @@ class Lesson(models.Model):
                 datetime__lt=self.end_datetime,  # Existing lesson starts before new lesson ends
                 end_datetime__gt=self.datetime  # Existing lesson ends after new lesson starts
             )
+            print(conflicting_lessons)
+            for lesson in conflicting_lessons:
+                print(lesson.datetime)
             if conflicting_lessons.exists():
                 raise ValidationError("There is a conflicting lesson during this time.")
 
     def check_available_time(self):
         """Check if the lesson is within the teacher's available time."""
-        lesson_day = str(self.datetime.weekday() + 1)
         # Convert lesson times to GMT
-        lesson_start_gmt = self.datetime.astimezone(gmt7).time()
+        start_gmt = self.datetime.astimezone(gmt7)
+        lesson_start_gmt = start_gmt.time()
         lesson_end_gmt = self.end_datetime.astimezone(gmt7).time()
-        
+        lesson_day = str(start_gmt.weekday() + 1)
+
         available_times = AvailableTime.objects.filter(
             teacher=self.teacher,
             day=lesson_day,
             start__lte=lesson_start_gmt,
             stop__gte=lesson_end_gmt
         )
-        print(available_times)
         if not available_times.exists():
             raise ValidationError("The lesson is not within the teacher's available time.")
 
@@ -192,9 +195,9 @@ class Lesson(models.Model):
                 previous_status = Lesson.objects.get(pk=self.pk).status
                 status_changed_to_pending = self.status == 'PENTE' and previous_status != 'PENTE'
 
-            if status_changed_to_pending:
-                self.check_for_conflicts()  # Check for conflicts before saving
-                self.check_available_time()  # Check if the lesson is within available time
-                self.check_unavailable_time()  # Check if the lesson conflicts with unavailable times
+            # if status_changed_to_pending:
+            #     self.check_for_conflicts()  # Check for conflicts before saving
+            #     self.check_available_time()  # Check if the lesson is within available time
+            #     self.check_unavailable_time()  # Check if the lesson conflicts with unavailable times
                 
             super(Lesson, self).save(*args, **kwargs)

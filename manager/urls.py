@@ -92,7 +92,7 @@ bookingCheckOutViewSet = views.BookingViewSet.as_view({
     'put': 'check_out',
 })
 
-bookingCheckOutViewSet = views.BookingViewSet.as_view({
+bookingMissedViewSet = views.BookingViewSet.as_view({
     'put': 'missed',
 })
 
@@ -134,7 +134,7 @@ urlpatterns = format_suffix_patterns([
     path('booking/<slug:code>/clear', bookingClearViewSet, name='booking-check-in'),
     path('booking/<slug:code>/check-in', bookingViewSet, name='booking-check-in'),
     path('booking/<slug:code>/check-out', bookingCheckOutViewSet, name='booking-check-out'),
-    path('booking/<slug:code>/missed', bookingCheckOutViewSet, name='booking-check-out'),
+    path('booking/<slug:code>/missed', bookingMissedViewSet, name='booking-check-out'),
 
     path('profile', profileViewSet, name='profile'),  # Add this line
 ])

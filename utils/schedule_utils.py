@@ -56,7 +56,6 @@ def compute_available_time(unavailables, lessons, date, start, stop, duration, i
     lesson_intervals = sorted(
         [(l.datetime, l.datetime + duration_td + gap_td) for l in lessons if l.datetime.date() == date]
     )
-    
     # Extract just the start times for binary search
     unavailable_starts = [start for start, _ in unavailable_intervals]
     lesson_starts = [start for start, _ in lesson_intervals]
