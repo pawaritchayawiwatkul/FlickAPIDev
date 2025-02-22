@@ -138,7 +138,7 @@ class ProfileSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = User
-        fields = ("first_name", "last_name", "phone_number", "email", "uuid", "profile_image", "is_teacher", "is_manager")
+        fields = ("country_code", "first_name", "last_name", "phone_number", "email", "uuid", "profile_image", "is_teacher", "is_manager")
 
 class ListCourseRegistrationSerializer(serializers.ModelSerializer):
     course_name = serializers.CharField(source="course.name")
@@ -172,7 +172,7 @@ class CreateCourseRegistrationSerializer(serializers.Serializer):
     number_of_lessons = serializers.IntegerField(required=False)
 
     def create(self, validated_data):
-        regis = CourseRegistration.objects.create(**validated_data)
+        regis = CourseRegistration.objects.create(payment_status="CON", **validated_data)
         return regis
     
     def validate(self, attrs):

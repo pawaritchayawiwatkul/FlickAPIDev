@@ -106,6 +106,11 @@ profileViewSet = views.ProfileViewSet.as_view({
     'delete': 'destroy'
 })
 
+schoolSettingsViewSet = views.SchoolSettingsViewSet.as_view({
+    'get': 'retrieve',
+    'put': 'update'
+})
+
 # Enter URL path below
 urlpatterns = format_suffix_patterns([
     path('insight', insightViewSet, name='insight'),
@@ -137,4 +142,5 @@ urlpatterns = format_suffix_patterns([
     path('booking/<slug:code>/missed', bookingMissedViewSet, name='booking-check-out'),
 
     path('profile', profileViewSet, name='profile'),  # Add this line
+    path('school-settings', schoolSettingsViewSet, name='school-settings'),
 ])

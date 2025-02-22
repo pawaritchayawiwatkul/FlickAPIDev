@@ -5,7 +5,29 @@ from school.models import Course
 from core.models import User
 from datetime import timedelta
 from django.utils.timezone import now
-    
+
+class ProfileSerializer(serializers.ModelSerializer):
+    uuid = serializers.UUIDField(read_only=True)
+    is_teacher = serializers.BooleanField(read_only=True)
+    points = serializers.IntegerField(source='student.points', required=False)  # Source is the related_name of the Student model
+
+    class Meta:
+        model = User
+        fields = ("country_code", "first_name", "last_name", "phone_number", "email", "uuid", "profile_image", "is_teacher", "points")
+
+    def update(self, instance, validated_data):
+        student_data = validated_data.pop('student', {})
+        points = student_data.get('points')
+
+        instance = super().update(instance, validated_data)
+
+        if points is not None:
+            student = instance.student
+            student.points = points
+            student.save()
+
+        return instance
+
 class ListTeacherSerializer(serializers.ModelSerializer):
     first_name = serializers.CharField(source="teacher.user.first_name")
     last_name = serializers.CharField(source="teacher.user.last_name")
@@ -27,7 +49,7 @@ class ListCourseRegistrationSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = CourseRegistration
-        fields = ("uuid", "course_name", "lessons_left", "number_of_lessons", "exp_date", "course_image_url", "instructor_name", "status")
+        fields = ( "uuid", "course_name", "lessons_left", "number_of_lessons", "exp_date", "course_image_url", "instructor_name", "status")
 
 class CourseRegistrationDetailSerializer(serializers.ModelSerializer):
     course_name = serializers.CharField(source="course.name")

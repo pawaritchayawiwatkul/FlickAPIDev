@@ -7,14 +7,16 @@ from school.models import Course, School
 from dateutil.relativedelta import relativedelta
 from datetime import date, timedelta
 from core.models import User  # Add this import
+from school.models import SchoolSettings  # Add this import
 
 class CourseRegistrationSerializer(serializers.ModelSerializer):
     teacher_uuid = serializers.UUIDField(write_only=True, required=True)
     course_uuid = serializers.UUIDField(write_only=True, required=True)  # Added course_uuid
     student_uuid = serializers.UUIDField(write_only=True, required=True)
-    discount = serializers.FloatField()
+    discount = serializers.FloatField(default=0)
     payment_slip = serializers.ImageField(required=False)  # Add payment_slip field
     number_of_lessons = serializers.IntegerField(required=False)  # Add number_of_lessons field
+    payment_status = serializers.CharField(read_only=True)
 
     class Meta:
         model = CourseRegistration
@@ -43,7 +45,7 @@ class CourseRegistrationSerializer(serializers.ModelSerializer):
         try:
             student = Student.objects.get(user__uuid=student_uuid)
         except Student.DoesNotExist:
-            return serializers.ValidationError({"student_uuid": "Student with this UUID does not exist."})
+            raise serializers.ValidationError({"student_uuid": "Student with this UUID does not exist."})
 
         data['teacher'] = teacher
         data['student'] = student
@@ -85,13 +87,14 @@ class CourseRegistrationSerializer(serializers.ModelSerializer):
         registration = CourseRegistration.objects.create(
             teacher=teacher,
             student=student,
+            payment_status='CON',
             **validated_data  # Add remaining fields dynamically
         )
         return registration
     
 class CourseSerializer(serializers.ModelSerializer):
     name = serializers.CharField(max_length=100)
-    description = serializers.CharField(max_length=300, required=False)
+    description = serializers.CharField(max_length=300, required=False, allow_blank=True)
     no_exp = serializers.BooleanField(default=True)
     exp_range = serializers.IntegerField(required=False)
     duration = serializers.IntegerField()
@@ -133,7 +136,7 @@ class CourseSerializer(serializers.ModelSerializer):
     
 class CourseDetailSerializer(serializers.ModelSerializer):
     name = serializers.CharField(max_length=100)
-    description = serializers.CharField(max_length=300, required=False)
+    description = serializers.CharField(max_length=300, required=False, allow_blank=True)
     no_exp = serializers.BooleanField(default=True)
     exp_range = serializers.IntegerField(required=False)
     duration = serializers.IntegerField()
@@ -388,3 +391,18 @@ class EditLessonSerializer(serializers.ModelSerializer):
         instance.datetime = validated_data.get('datetime', instance.datetime)
         instance.save()
         return instance
+
+class SchoolSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = School
+        fields = ['name', 'description', 'payment_qr_code']
+
+class SchoolSettingsSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SchoolSettings
+        fields = [
+            'days_ahead', 
+            'interval', 
+            'cancel_b4_hours',
+            'teacher_break',
+        ]

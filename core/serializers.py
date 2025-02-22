@@ -16,6 +16,7 @@ import copy
 from rest_framework.fields import SkipField
 from rest_framework.relations import Hyperlink, PKOnlyObject  # NOQA # isort:skip
 from notifications.models import Notification
+from phonenumbers import parse, is_valid_number, region_code_for_country_code, NumberParseException
 
 User = get_user_model()
     
@@ -31,21 +32,65 @@ class CreateUserSerializer(serializers.ModelSerializer):
     last_name = serializers.CharField(required=True)
     email = serializers.EmailField(required=True)
     phone_number = serializers.CharField(required=True)
+    country_code = serializers.CharField(default='66')
 
     class Meta:
         model = User
-        fields = ['first_name', 'last_name', 'email', 'phone_number', 'profile_image']
+        fields = ['first_name', 'last_name', 'email', 'phone_number', 'profile_image', 'country_code']
+
+    def validate_phone_number(self, value):
+        country_code = self.initial_data.get('country_code', '66')
+        try:
+            country_code = int(country_code)
+            region = region_code_for_country_code(country_code)
+            parsed_number = parse(value, region)
+
+            if not is_valid_number(parsed_number):
+                raise serializers.ValidationError("Invalid phone number.")
+        except (NumberParseException, ValueError):
+            raise serializers.ValidationError("Invalid country code or phone number.")
+        return value
+
+    def validate_country_code(self, value):
+        try: 
+            value = int(value)
+            region = region_code_for_country_code(value)
+            if region == "ZZ":
+                raise serializers.ValidationError("Country code is Invalid.")
+            return value
+        except ValueError:
+            raise serializers.ValidationError("Country code is Invalid.")
 
 class UserUpdateSerializer(serializers.ModelSerializer):
+    country_code = serializers.CharField(default='66')
+
     class Meta:
         model = User
-        fields = ['first_name', 'last_name', 'email', 'phone_number', 'profile_image', 'is_manager']  # Fields to be updated
+        fields = ['first_name', 'last_name', 'email', 'phone_number', 'profile_image', 'is_manager', 'country_code']  # Fields to be updated
 
     # Optionally, we can add additional validation or logic if needed
     def validate_phone_number(self, value):
-        if len(value) != 10:
-            raise serializers.ValidationError("Phone number must be 10 digits.")
+        country_code = self.initial_data.get('country_code', '66')
+        try:
+            country_code = int(country_code)
+            region = region_code_for_country_code(country_code)
+            parsed_number = parse(value, region)
+
+            if not is_valid_number(parsed_number):
+                raise serializers.ValidationError("Invalid phone number.")
+        except (NumberParseException, ValueError):
+            raise serializers.ValidationError("Invalid country code or phone number.")
         return value
+
+    def validate_country_code(self, value):
+        try: 
+            value = int(value)
+            region = region_code_for_country_code(value)
+            if region == "ZZ":
+                raise serializers.ValidationError("Country code is Invalid.")
+            return value
+        except ValueError:
+            raise serializers.ValidationError("Country code is Invalid.")
     
 class UserCreateSerializer(BaseUserCreateSerializer):
     school_name = serializers.CharField(required=False)
@@ -151,12 +196,3 @@ class UserCreateSerializer(BaseUserCreateSerializer):
 class UserSerializer(BaseUserSerializer):
     class Meta(BaseUserSerializer.Meta):
         fields = ['email', 'full_name', 'uuid']
-
-class ProfileSerializer(serializers.ModelSerializer):
-    uuid = serializers.UUIDField(read_only=True)
-    is_teacher = serializers.BooleanField(read_only=True)
-
-    class Meta:
-        model = User
-        fields = ("first_name", "last_name", "phone_number", "email", "uuid", "profile_image", "is_teacher")
-

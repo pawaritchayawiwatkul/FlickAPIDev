@@ -18,7 +18,8 @@ class Teacher(models.Model):
     school = models.ForeignKey(School, models.CASCADE, related_name="teacher")
     # available_times = models.JSONField(default=list)  # Add available_times field
     course = models.ManyToManyField(Course, related_name="teacher")
-
+    teacher_break = models.PositiveIntegerField(default=15)
+    
     def save(self, *args, **kwargs):
         self.clean()  # Validate before saving
         super(Teacher, self).save(*args, **kwargs)

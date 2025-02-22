@@ -1,6 +1,7 @@
 from django.urls import path
 from .views import (
     school_info,
+    check_in,
     ProfileViewSet,
     TeacherViewSet,
     RegistrationViewSet,
@@ -12,6 +13,8 @@ from .views import (
 urlpatterns = [
     # Function-based view
     path("school-info/", school_info, name="school_info"),
+
+    path("check-in", check_in, name="check_in"),
 
     # Profile routes
     path("profile/", ProfileViewSet.as_view({"get": "retrieve", "put": "update", "delete": "destroy"}), name="profile"),

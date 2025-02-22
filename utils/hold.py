@@ -8,28 +8,27 @@ from datetime import timedelta
 from collections import defaultdict
 import bisect
 
-
 def generate_upcoming_private(school: School, registrations: List[CourseRegistration]) -> List[dict]:
     date_today = now().date()
-
+    
     # Fetch SchoolSettings (handle if missing)
     try:
         school_settings = school.settings  # One-to-One relation
         days_ahead = school_settings.days_ahead
         interval = school_settings.interval
         max_capacity = school.facilities.first().capacity  # Default fallback
-    except SchoolSettings.DoesNotExist and AttributeError:
+    except:
         days_ahead = 21  # Default fallback
         interval = 30  # Default fallback
         max_capacity = 21
-
+    
     # Fetch all existing lessons in the school
     school_lessons = Lesson.objects.filter(course__school=school, datetime__gte=date_today)
     
     # Track ongoing lessons per time slot and day
     ongoing_lessons_per_day = defaultdict(list)
     for lesson in school_lessons:
-        bisect.insort(ongoing_lessons_per_day[lesson.datetime.date()], (lesson.datetime, lesson.end_datetime))
+        bisect.insort(ongoing_lessons_per_day[lesson.datetime.date()], (lesson.datetime.time(), lesson.end_datetime.time()))
     
     generated_lessons = []
     for registration in registrations:
@@ -43,20 +42,30 @@ def generate_upcoming_private(school: School, registrations: List[CourseRegistra
         available_times = teacher.cached_available_times  
         break_time = teacher.teacher_break
         new_lessons = []
+        
         for available_time in available_times:
             start = available_time.start
             stop = available_time.stop
             day_of_week = int(available_time.day)
-
-
+            
             for day_offset in range(days_ahead):
                 current_date = date_today + timedelta(days=day_offset)
                 if current_date.isoweekday() == day_of_week:
+                    
+                    # Get fully booked time slots
+                    full_slots = set()
+                    existing_lessons = ongoing_lessons_per_day[current_date]
+                    
+                    for lesson_start, lesson_end in existing_lessons:
+                        if lesson_start < stop and lesson_end > start:
+                            full_slots.add((lesson_start, lesson_end))
+                    
+                    unavailables = list(unavailables)
+                    unavailables.extend(list(full_slots))
                     available_slots = compute_available_time(
                         unavailables, lessons, current_date, start, stop, course.duration, interval, break_time
                     )
-
-                    existing_lessons = ongoing_lessons_per_day[current_date]
+                    
                     for slot in available_slots:
                         lesson_start = slot['start']
                         lesson_end = lesson_start + timedelta(minutes=course.duration)
@@ -69,7 +78,7 @@ def generate_upcoming_private(school: School, registrations: List[CourseRegistra
                         if overlapping_count < max_capacity:
                             new_lessons.append({'datetime': lesson_start})
                             bisect.insort(ongoing_lessons_per_day[current_date], (lesson_start, lesson_end))
-        
+
         generated_lessons.append({
             "course_name": course.name,
             "course_description": course.description,
@@ -82,5 +91,5 @@ def generate_upcoming_private(school: School, registrations: List[CourseRegistra
             "location": school.location,
             "lessons": new_lessons
         })
-
+    
     return generated_lessons

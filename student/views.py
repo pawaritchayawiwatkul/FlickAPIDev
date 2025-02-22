@@ -4,14 +4,9 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.viewsets import ViewSet
 from student.models import Student
-from teacher.models import Teacher
-from django.utils import timezone
 from student.serializers import ProfileSerializer
-from django.shortcuts import get_object_or_404
 import pytz
 
-
-_timezone =  timezone.get_current_timezone()
 gmt7 = pytz.timezone('Asia/Bangkok')
 
 @permission_classes([IsAuthenticated])

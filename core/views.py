@@ -16,6 +16,7 @@ import hashlib
 import secrets
 from core.models import User
 from core.serializers import NotificationSerializer
+from phonenumbers import is_valid_number, parse, NumberParseException, region_code_for_country_code
 
 # Create your views here.
 
@@ -56,7 +57,6 @@ def check_usertype(request, type):
     phone_number = request.GET.get('phone_number')
     if not phone_number:
         return Response({'error': 'Phone number is required'}, status=400)
-
     filters['phone_number'] = phone_number
     try:
         user = User.objects.get(**filters)  # Assuming phone_number is a field in the User model
@@ -85,11 +85,23 @@ class DeviceViewSet(FCMDeviceAuthorizedViewSet):
 class OTPViewSet(ViewSet):
     def send(self, request):
         phone_number = request.data.get('phone_number')
+        country_code = request.data.get('country_code', 66)  # Default to '66' if not provided
         if not phone_number:
             return Response({'error': 'Phone number is required'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            country_code = int(country_code)
+            region = region_code_for_country_code(country_code)
+            parsed_number = parse(phone_number, region)
+
+            if not is_valid_number(parsed_number):
+                return Response({'error': 'Invalid phone number'}, status=status.HTTP_400_BAD_REQUEST)
+        except (NumberParseException, ValueError):
+            return Response({'error': 'Invalid country code or phone number'}, status=status.HTTP_400_BAD_REQUEST)
+
 
         try:
-            user = User.objects.get(phone_number=phone_number)  # Assuming phone_number is used as username
+            user = User.objects.get(phone_number=phone_number, country_code=country_code)
         except User.DoesNotExist:
             return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
 
@@ -101,18 +113,30 @@ class OTPViewSet(ViewSet):
 
         # Mock sending OTP (replace with real SMS/email integration)
         print(f"Sending OTP {otp} to {phone_number}")
-        smsManager.send_sms("66", phone_number, f"Your MindChoice OTP is: {otp}. Use this to verify your account. Do not share this code with anyone.")
+        smsManager.send_sms(str(country_code), phone_number, f"Your MindChoice OTP is: {otp}. Use this to verify your account. Do not share this code with anyone.")
         return Response({'message': 'OTP sent successfully'}, status=status.HTTP_200_OK)
 
     def check(self, request):
         phone_number = request.data.get('phone_number')
+        country_code = request.data.get('country_code', 66)  # Default to '66' if not provided
         otp = request.data.get('otp')
 
         if not phone_number or not otp:
             return Response({'error': 'Phone number and OTP are required'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            country_code = int(country_code)
+            region = region_code_for_country_code(country_code)
+            parsed_number = parse(phone_number, region)
+
+            if not is_valid_number(parsed_number):
+                return Response({'error': 'Invalid phone number'}, status=status.HTTP_400_BAD_REQUEST)
+        except (NumberParseException, ValueError):
+            return Response({'error': 'Invalid country code or phone number'}, status=status.HTTP_400_BAD_REQUEST)
+
 
         try:
-            user = User.objects.get(phone_number=phone_number)
+            user = User.objects.get(phone_number=phone_number, country_code=country_code)
         except User.DoesNotExist:
             return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
 
@@ -142,13 +166,25 @@ class OTPViewSet(ViewSet):
 class PinViewSet(ViewSet):
     def check(self, request):
         phone_number = request.data.get('phone_number')
+        country_code = request.data.get('country_code', 66)  # Default to '66' if not provided
         pin = request.data.get('pin')
 
         if not phone_number or not pin:
             return Response({'error': 'Phone number and pin are required.'}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            user = User.objects.get(phone_number=phone_number)  # Assuming `username` stores phone_number
+            country_code = int(country_code)
+            region = region_code_for_country_code(country_code)
+            parsed_number = parse(phone_number, region)
+
+            if not is_valid_number(parsed_number):
+                return Response({'error': 'Invalid phone number'}, status=status.HTTP_400_BAD_REQUEST)
+        except (NumberParseException, ValueError):
+            return Response({'error': 'Invalid country code or phone number'}, status=status.HTTP_400_BAD_REQUEST)
+
+
+        try:
+            user = User.objects.get(phone_number=phone_number, country_code=country_code)  # Assuming `username` stores phone_number
         except User.DoesNotExist:
             return Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
 
@@ -170,11 +206,23 @@ class PinViewSet(ViewSet):
 
     def set_pin(self, request):
         phone_number = request.data.get('phone_number')
+        country_code = request.data.get('country_code', '66')  # Default to '66' if not provided
         pin = request.data.get('pin')
         temp_key = request.data.get('temp_key')
 
         if not phone_number or not pin or not temp_key:
             return Response({'error': 'Phone number, PIN, and temp key are required.'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            country_code = int(country_code)
+            region = region_code_for_country_code(country_code)
+            parsed_number = parse(phone_number, region)
+
+            if not is_valid_number(parsed_number):
+                return Response({'error': 'Invalid phone number'}, status=status.HTTP_400_BAD_REQUEST)
+        except (NumberParseException, ValueError):
+            return Response({'error': 'Invalid country code or phone number'}, status=status.HTTP_400_BAD_REQUEST)
+
 
         try:
             # Extract and validate the phone number from the temp_key
@@ -188,7 +236,7 @@ class PinViewSet(ViewSet):
                 return Response({'error': 'Invalid or expired temp key.'}, status=status.HTTP_400_BAD_REQUEST)
 
             # Fetch user by phone number
-            user = User.objects.get(phone_number=phone_number)
+            user = User.objects.get(phone_number=phone_number, country_code=country_code)
         except User.DoesNotExist:
             return Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
 

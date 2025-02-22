@@ -9,6 +9,7 @@ from student.models import CourseRegistration, Student, StudentTeacherRelation, 
 from teacher.models import Teacher, Lesson
 from school.models import Course
 from student.v2.serializers import (
+    ProfileSerializer,
     CreateBookingSerializer,
     ListLessonCourseSerializer,
     CourseRegistrationDetailSerializer,
@@ -21,7 +22,6 @@ from student.v2.serializers import (
 )
 from django.core.exceptions import ValidationError
 from school.models import School, SchoolSettings
-from core.serializers import ProfileSerializer
 from internal.permissions import IsStudent
 from utils.notification_utils import send_notification
 from utils.gen_upcomming import generate_upcoming_private
@@ -32,7 +32,6 @@ from datetime import timedelta
 from django.utils.dateparse import parse_datetime
 
 gmt7 = pytz.timezone('Asia/Bangkok')
-
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated, IsStudent])
@@ -47,6 +46,43 @@ def school_info(request):
         "location": school.location,
     })
 
+@api_view(['PUT'])
+@permission_classes([IsAuthenticated, IsStudent])
+def check_in(request):
+    teacher_uuid = request.GET.get("teacher_uuid")
+    if not teacher_uuid:
+        return Response({"error": "Teacher UUID is required."}, status=400)
+
+    teacher = get_object_or_404(Teacher, user__uuid=teacher_uuid)
+    student = request.user.student
+
+    now = timezone.now()
+    one_hour_later = now + timedelta(hours=1)
+    one_hour_before = now - timedelta(hours=1)
+
+    closest_lesson = Lesson.objects.filter(
+        teacher=teacher,
+        datetime__gte=one_hour_before,
+        datetime__lte=one_hour_later,
+        status='CON', # Only allow check-in for confirmed lessons
+    ).order_by('datetime').first()
+
+    if closest_lesson:
+        booking = Booking.objects.filter(
+            lesson=closest_lesson,
+            student=student,
+            status='COM', # Only allow check-in for completed bookings
+        ).first()
+
+        if booking:
+            booking.check_in = datetime.now()
+            booking.check_out = datetime.now()
+            booking.save()
+            return Response({"message": "Success"}, status=200)
+        else:
+            return Response({"message": "No booking found for the closest lesson."}, status=404)
+    else:
+        return Response({"message": "No lessons found within the next hour."}, status=404)
 
 class ProfileViewSet(ViewSet):
     """
@@ -414,8 +450,8 @@ class BookingViewSet(ViewSet):
             lesson.status = "CAN"
         lesson.save()
 
-        settings = SchoolSettings.objects.select_related("settings").get(school_id=student.school.first().id)
-        cancel_b4_hours = settings.cancel_b4_hours
+        school = School.objects.select_related("settings").get(id=student.school.first().id)
+        cancel_b4_hours = school.settings.cancel_b4_hours
         if lesson.datetime - timedelta(hours=cancel_b4_hours) < timezone.now():
             if booking.registration.lessons_left > 0:  # Prevent negative balance
                 booking.registration.lessons_left -= 1
@@ -423,3 +459,5 @@ class BookingViewSet(ViewSet):
         send_notification(lesson.teacher.user, "Class Cancellation", f"{request.user.first_name} has canceled a class with you. Check your schedule for details.")
 
         return Response({"message": "Booking canceled successfully."}, status=200)
+
+    

@@ -70,6 +70,8 @@ class User(AbstractBaseUser, PermissionsMixin):
             "Unselect this instead of deleting accounts."
         ),
     )
+    
+    country_code = CharField(max_length=3, default='66')
 
     objects = CustomUserManager()
     google_credentials = models.JSONField(null=True, blank=True)

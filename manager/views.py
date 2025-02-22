@@ -5,7 +5,7 @@ from django.db.models import Prefetch, Sum, Count
 from django.db.models.deletion import ProtectedError
 from datetime import datetime
 from student.models import Lesson, CourseRegistration, StudentTeacherRelation, Student, Booking
-from school.models import School, Course  # Ensure Admin model is imported
+from school.models import School, Course, SchoolSettings  # Ensure Admin model is imported
 from teacher.models import Teacher, AvailableTime
 from manager.models import Admin
 from manager.serializers import ( 
@@ -18,7 +18,9 @@ from manager.serializers import (
     AvailableTimeSerializer, 
     LessonSerializer,
     EditLessonSerializer,
-    ProfileSerializer  # Add this import
+    ProfileSerializer,  # Add this import
+    SchoolSettingsSerializer,  # Add this import
+    SchoolSerializer
 )
 from core.serializers import CreateUserSerializer, UserUpdateSerializer
 from rest_framework import status
@@ -326,6 +328,8 @@ class StaffViewSet(ViewSet):
                 "uuid": teacher.user.uuid,
                 "phone_number": teacher.user.phone_number,
                 "email": teacher.user.email,
+                "break_time": teacher.teacher_break,
+                "is_manager": teacher.user.is_manager,
             } for teacher in school.cached_teachers
         ]
 
@@ -355,8 +359,9 @@ class StaffViewSet(ViewSet):
             "last_name": user.last_name,  # Full name
             "email": user.email,
             "phone_number": user.phone_number,
-            "is_manager": user.is_manager,
-        }
+                "break_time": teacher.teacher_break,
+            "is_manager": user.is_manager,        
+            }
 
         return Response({"teacher": teacher_details})
         
@@ -396,33 +401,51 @@ class StaffViewSet(ViewSet):
         if not admin:
             return Response({"error": "Admin not found for the current user."}, status=404)
 
+        break_time = request.data.pop('break_time', None)
+
         # Retrieve the teacher by their UUID and ensure they belong to the admin's school
         try:
             teacher = Teacher.objects.get(user__uuid=uuid, school_id=admin.school.id)
+            if break_time:
+                teacher.teacher_break = int(break_time)
+                teacher.save()
         except Teacher.DoesNotExist:
             return Response({"error": "Teacher not found."}, status=404)
-
+        except ValueError:
+            return Response({"error": "Break time must be an integer."}, status=400)
         # Use the UserUpdateSerializer to validate and update the user data
         serializer = UserUpdateSerializer(teacher.user, data=request.data, partial=True)  # partial=True allows partial updates
-        
         if serializer.is_valid():
-            instance = serializer.save()  # Save the updated data
-            
+            try: 
+                instance = serializer.save()  # Save the updated data
                 
-            if instance.is_manager:
-                # Create Admin instance if it doesn't exist
-                Admin.objects.get_or_create(user=teacher.user, school=admin.school)
-            else:
-                # Remove Admin instance if it exists
-                Admin.objects.filter(user=teacher.user).delete()
-            
-            return Response({"message": "User info updated successfully."}, status=status.HTTP_200_OK)
+                    
+                if instance.is_manager:
+                    # Create Admin instance if it doesn't exist
+                    Admin.objects.get_or_create(user=teacher.user, school=admin.school)
+                else:
+                    # Remove Admin instance if it exists
+                    Admin.objects.filter(user=teacher.user).delete()
+                
+                return Response({"message": "User info updated successfully."}, status=status.HTTP_200_OK)
+            except IntegrityError as e:
+                # Check the exception message for details
+                error_message = str(e)
+
+                if "core_user_email_key" in error_message:
+                    return Response({"email": "This email is already in use."}, status=status.HTTP_400_BAD_REQUEST)
+                elif "core_user_phone_number" in error_message:  # Example constraint for phone number
+                    return Response({"phone": "This phone number is already in use."}, status=status.HTTP_400_BAD_REQUEST)
+                else:
+                    return Response({"error": "A unique constraint was violated."}, status=status.HTTP_400_BAD_REQUEST)
+            except Exception as e:
+                return Response({"error": "An error occurred while editting the staff."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
     def create(self, request):
         # Retrieve the Admin instance for the logged-in user
-        admin = Admin.objects.select_related('school').filter(user_id=request.user.id).first()
+        admin = Admin.objects.select_related('school__settings').filter(user_id=request.user.id).first()
         if not admin:
             return Response({"error": "Admin not found for the current user."}, status=404)
 
@@ -446,7 +469,8 @@ class StaffViewSet(ViewSet):
             # Create the Teacher instance and associate with the School
             teacher = Teacher.objects.create(user=user, school=admin.school)
             available_time_serializer.save(teacher=teacher)
-            
+            teacher.teacher_break = admin.school.settings.teacher_break
+            teacher.save()
             # If the user is a manager, create an Admin instance
             if is_manager:
                 Admin.objects.create(user=user, school=admin.school)
@@ -461,7 +485,7 @@ class StaffViewSet(ViewSet):
             else:
                 return Response({"error": "A unique constraint was violated."}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
-            return Response({"error": "An error occurred while creating the client."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({"error": "An error occurred while creating the staff."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
     def get_availables(self, request, uuid):
         # Retrieve the Admin instance for the logged-in user
@@ -498,16 +522,14 @@ class StaffViewSet(ViewSet):
         unavailables = teacher.cached_unavailables
         lessons = teacher.cached_lessons
         available_times = teacher.cached_available_times
-        print(available_times)
-        interval = 30
-        gap = 15
+        interval = 15
         availables = []
 
         for available_time in available_times:
             start = available_time.start
             stop = available_time.stop
             availables.extend(compute_available_time(
-                unavailables, lessons, date.date(), start, stop, duration, interval, gap
+                unavailables, lessons, date.date(), start, stop, duration, interval, 0
             ))
 
         return Response(availables, status=200)
@@ -544,7 +566,7 @@ class ClientViewSet(ViewSet):
                 "last_name": student.user.last_name,
                 "uuid": student.user.uuid,
                 "phone_number": student.user.phone_number,
-
+                "points": student.points,
             }
             for student in school.students
         ]
@@ -576,6 +598,7 @@ class ClientViewSet(ViewSet):
             "last_name": user.last_name,  # Full name
             "email": user.email,
             "phone_number": user.phone_number,
+            "points": student.points,
         }
 
         return Response({"student": student_detail})
@@ -587,6 +610,7 @@ class ClientViewSet(ViewSet):
             return Response({"error": "Admin not found for the current user."}, status=404)
 
         # Deserialize the request data for the User (teacher) creation
+        points = request.data.pop('points', None)
         user_serializer = CreateUserSerializer(data=request.data)
         if not user_serializer.is_valid():
             return Response(user_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -598,7 +622,13 @@ class ClientViewSet(ViewSet):
             # Create the Teacher instance and associate with the School
             student = Student.objects.create(user=user)
             student.school.add(admin.school)
-
+            if points:
+                try:
+                    points = int(points)
+                    student.points = points
+                    student.save()
+                except ValueError:
+                    return Response({"error": "Points must be an integer."}, status=status.HTTP_400_BAD_REQUEST)
             return Response({
                 "success": True, 
                  "message": "Client created successfully.",
@@ -630,7 +660,15 @@ class ClientViewSet(ViewSet):
         student = Student.objects.select_related('user').filter(user__uuid=uuid, school=school).first()
         if not student:
             return Response({"error": "Student not found."}, status=status.HTTP_404_NOT_FOUND)
-
+        points = request.data.pop('points', None)
+        if points:
+            try:
+                points = int(points)
+                student.points = points
+                student.save()
+            except ValueError:
+                return Response({"error": "Points must be an integer."}, status=status.HTTP_400_BAD_REQUEST)
+            
         # Retrieve and validate data for updating
         user_serializer = CreateUserSerializer(student.user, data=request.data, partial=True)
         if not user_serializer.is_valid():
@@ -643,8 +681,18 @@ class ClientViewSet(ViewSet):
                 "success": True, 
                 "message": "Client updated successfully.",
             }, status=status.HTTP_200_OK)
+        except IntegrityError as e:
+            # Check the exception message for details
+            error_message = str(e)
+
+            if "core_user_email_key" in error_message:
+                return Response({"email": "This email is already in use."}, status=status.HTTP_400_BAD_REQUEST)
+            elif "core_user_phone_number" in error_message:  # Example constraint for phone number
+                return Response({"phone": "This phone number is already in use."}, status=status.HTTP_400_BAD_REQUEST)
+            else:
+                return Response({"error": "A unique constraint was violated."}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"error": "An error occurred while editing the client."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     def list_registration(self, request, uuid):
         # Retrieve the Admin instance for the logged-in user
@@ -677,6 +725,7 @@ class ClientViewSet(ViewSet):
                 "paid_price": registration.paid_price,
                 "lesson_duration": registration.course.duration,
                 "lessons_left": registration.lessons_left,
+                "payment_status": registration.payment_status,
                 "teacher_name": registration.teacher.user.get_full_name() if registration.teacher else None,
                 "teacher_uuid": registration.teacher.user.uuid if registration.teacher else None,
             })
@@ -691,7 +740,7 @@ class ClientViewSet(ViewSet):
         serializer = CourseRegistrationSerializer(data=request_data)
         if serializer.is_valid():
             serializer.save()
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
+            return Response({"message": "success"}, status=status.HTTP_201_CREATED)
         
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -975,3 +1024,90 @@ class ProfileViewSet(ViewSet):
         
         request.user.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+class SchoolSettingsViewSet(ViewSet):
+    permission_classes = [IsAuthenticated, IsManager]
+
+    def retrieve(self, request):
+        admin = Admin.objects.filter(user_id=request.user.id).first()
+        if not admin:
+            return Response({"error": "Admin not found for the current user."}, status=404)
+
+        school = School.objects.select_related("settings").prefetch_related("facilities").filter(id=admin.school.id).first()
+        settings = school.settings
+        facility = school.facilities.first()  # Get the first facility
+        
+        if not school:
+            return Response({"error": "School not found."}, status=404)
+        if not settings:
+            return Response({"error": "School settings not found."}, status=404)
+        if not facility:
+            return Response({"error": "Facility not found."}, status=404)
+
+        setserializer = SchoolSettingsSerializer(settings)
+        schserializer = SchoolSerializer(school)
+
+        return Response({
+            "school": schserializer.data, 
+            "settings": setserializer.data,
+            "facility_capacity": facility.capacity  # Include facility capacity
+        })
+
+
+    def update(self, request):
+        admin = Admin.objects.filter(user_id=request.user.id).first()
+        if not admin:
+            return Response({"error": "Admin not found for the current user."}, status=404)
+
+        school = School.objects.select_related("settings").prefetch_related("facilities").filter(id=admin.school.id).first()
+        
+        if not school:
+            return Response({"error": "School not found."}, status=404)
+        
+        settings = school.settings
+        facility = school.facilities.first()  # Get the first facility
+        
+        if not settings:
+            return Response({"error": "School settings not found."}, status=404)
+        if not facility:
+            return Response({"error": "Facility not found."}, status=404)
+
+        # Separate school, settings, and facility data from request
+        school_data = {key: value for key, value in request.data.items() if key in SchoolSerializer.Meta.fields}
+        settings_data = {key: value for key, value in request.data.items() if key in SchoolSettingsSerializer.Meta.fields}
+        facility_capacity = request.data.get("facility_capacity")
+
+        # Validate facility_capacity
+        if facility_capacity is not None:
+            try:
+                facility_capacity = int(facility_capacity)  # Ensure it's an integer
+                if facility_capacity < 0:
+                    return Response({"facility_capacity_error": "Facility capacity must be a positive integer."}, status=400)
+            except (ValueError, TypeError):
+                return Response({"facility_capacity_error": "Facility capacity must be an integer."}, status=400)
+
+        # Validate School and Settings
+        school_serializer = SchoolSerializer(school, data=school_data, partial=True)
+        settings_serializer = SchoolSettingsSerializer(settings, data=settings_data, partial=True)
+
+        # Check if both are valid before saving
+        if school_serializer.is_valid() and settings_serializer.is_valid():
+            school_serializer.save()
+            settings_serializer.save()
+            if facility_capacity is not None:
+                facility.capacity = facility_capacity
+                facility.save()
+            return Response({
+                "school": school_serializer.data, 
+                "settings": settings_serializer.data,
+                "facility_capacity": facility.capacity  # Include updated facility capacity
+            }, status=200)
+
+        # If either fails, return errors
+        return Response(
+            {
+                "school_errors": school_serializer.errors if not school_serializer.is_valid() else None,
+                "settings_errors": settings_serializer.errors if not settings_serializer.is_valid() else None,
+            },
+            status=400,
+        )

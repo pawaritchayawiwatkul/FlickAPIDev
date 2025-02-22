@@ -61,6 +61,7 @@ class Student(models.Model):
     school = models.ManyToManyField(to=School, related_name="student")
     teacher = models.ManyToManyField(to=Teacher, through=StudentTeacherRelation, related_name="student")
     user = models.OneToOneField(User, models.CASCADE)
+    points = models.IntegerField(default=0)
 
     def __str__(self) -> str:
         return self.user.__str__()
@@ -120,6 +121,7 @@ class Booking(models.Model):
         null=True, 
         blank=True  # Allow null for guest bookings
     )
+
     student = models.ForeignKey(
         to=Student, 
         on_delete=models.CASCADE, 
@@ -127,6 +129,7 @@ class Booking(models.Model):
         null=True, 
         blank=True  # Allow null for guest bookings
     )
+
     guest = models.ForeignKey(
         to=Guest, 
         on_delete=models.CASCADE, 
@@ -134,11 +137,13 @@ class Booking(models.Model):
         null=True, 
         blank=True  # Allow null for student bookings
     )
+
     user_type = models.CharField(
         max_length=10, 
         choices=USER_TYPE_CHOICES, 
         default='student'
     )
+
     booked_datetime = models.DateTimeField(auto_now_add=True)
     status = models.CharField(
         max_length=10, 
