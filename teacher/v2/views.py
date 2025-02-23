@@ -7,15 +7,15 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.viewsets import ViewSet
 from rest_framework.response import Response
 from rest_framework import status
-from datetime import timedelta
+from datetime import timedelta, datetime
 import pytz
 from dateutil.parser import isoparse
-from teacher.models import Teacher, UnavailableTimeOneTime
+from teacher.models import Teacher, UnavailableTimeOneTime, AvailableTime
 from teacher.v2.serializers import (
     ListCourseSerializer, CourseDetailSerializer, CreateCourseSerializer,
-    ListCourseRegistrationSerializer, CourseRegistrationDetailSerializer, CreateCourseRegistrationSerializer,
+    ListCourseRegistrationSerializer, SimpleListCourseRegistrationSerializer, CourseRegistrationDetailSerializer, CreateCourseRegistrationSerializer,
     ListStudentSerializer, ProfileSerializer,
-    LessonDetailSerializer, ListLessonSerializer,
+    LessonDetailSerializer, ListLessonSerializer, CreateLessonSerializer,
     ListBookingSerializer, 
     CreateUnavailableTimeOneTimeSerializer, 
     ListUnavailableTimeOneTimeSerializer
@@ -25,8 +25,49 @@ from school.models import Course
 from core.serializers import CreateUserSerializer
 from utils.notification_utils import send_notification, create_calendar_event, delete_google_calendar_event
 from internal.permissions import IsTeacher, IsManager
+from utils.schedule_utils import compute_available_time
+from rest_framework.decorators import api_view, permission_classes
 
 gmt7 = pytz.timezone('Asia/Bangkok')
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated, IsTeacher])
+def get_availables(request):
+    # Extract date and duration from request data
+    date = request.GET.get("date")
+    duration = request.GET.get("duration")
+
+    if not date or not duration:
+        return Response({"error": "Date and duration are required."}, status=400)
+    try:
+        date = datetime.strptime(date, "%Y-%m-%d")
+    except ValueError:
+        return Response({"error": "Invalid date format. Use 'YYYY-MM-DD'."}, status=400)
+    try:
+        duration = int(duration)
+    except ValueError:
+        return Response({"error": "Invalid duration format. It should be an integer."}, status=400)
+
+    # Retrieve the teacher by UUID and ensure they belong to the admin's school
+    teacher = Teacher.objects.prefetch_related(
+        Prefetch('lesson', queryset=Lesson.objects.filter(status__in=["CON", "PENTE"]), to_attr='cached_lessons'),
+        Prefetch('course', queryset=Course.objects.filter(is_group=False), to_attr='cached_courses'),
+    ).select_related("school").filter(user_id=request.user.id).first()
+
+    if not teacher:
+        return Response({"error": "Teacher not found."}, status=404)
+    
+    unavailables = []
+    lessons = teacher.cached_lessons
+    interval = 15
+    availables = []
+    start = teacher.school.start
+    stop = teacher.school.stop
+    availables = compute_available_time(
+        unavailables, lessons, date.date(), start, stop, duration, interval, 0
+    )
+
+    return Response(availables, status=200)
 
 class CourseViewset(ViewSet):
     def get_permissions(self):
@@ -159,6 +200,17 @@ class RegistrationViewset(ViewSet):
         serializer = ListCourseRegistrationSerializer(instance=registrations, many=True)
         return Response(serializer.data)
 
+    def simple_list(self, request):
+        filters = {"teacher__user_id": request.user.id}
+        if student_uuid := request.GET.get("student_uuid"):
+            student = get_object_or_404(Student, user__uuid=student_uuid)
+            filters["student"] = student
+        if request.GET.get("has_lesson_left") == "true":
+            filters["lessons_left__gt"] = 0
+        registrations = CourseRegistration.objects.filter(**filters).select_related("course")
+        serializer = SimpleListCourseRegistrationSerializer(instance=registrations, many=True)
+        return Response(serializer.data)
+    
     def retrieve(self, request, code):
         registration = get_object_or_404(
             CourseRegistration, uuid=code, teacher__user_id=request.user.id
@@ -227,6 +279,15 @@ class LessonViewset(ViewSet):
                 data["end_datetime"] = bangkok_time.strftime('%Y-%m-%dT%H:%M:%SZ')
         return Response(response_data, status=status.HTTP_200_OK)
 
+    def create(self, request):
+        data = request.data.copy()
+        data["teacher_uuid"] = request.user.uuid
+        serializer = CreateLessonSerializer(data=data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
     def retrieve(self, request, code):
         filters = {
             "teacher__user_id": request.user.id,

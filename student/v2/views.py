@@ -49,35 +49,34 @@ def school_info(request):
 @api_view(['PUT'])
 @permission_classes([IsAuthenticated, IsStudent])
 def check_in(request):
-    teacher_uuid = request.GET.get("teacher_uuid")
-    if not teacher_uuid:
-        return Response({"error": "Teacher UUID is required."}, status=400)
-
-    teacher = get_object_or_404(Teacher, user__uuid=teacher_uuid)
+    code = request.data.get("code")
+    if not code:
+        return Response({"message": "Code is required."}, status=400)
+    
     student = request.user.student
 
-    now = timezone.now()
-    one_hour_later = now + timedelta(hours=1)
-    one_hour_before = now - timedelta(hours=1)
-
-    closest_lesson = Lesson.objects.filter(
-        teacher=teacher,
-        datetime__gte=one_hour_before,
-        datetime__lte=one_hour_later,
+    lesson = Lesson.objects.filter(
+        code=code,
         status='CON', # Only allow check-in for confirmed lessons
-    ).order_by('datetime').first()
+    ).first()
 
-    if closest_lesson:
+    if lesson:
         booking = Booking.objects.filter(
-            lesson=closest_lesson,
+            lesson=lesson,
             student=student,
             status='COM', # Only allow check-in for completed bookings
         ).first()
 
         if booking:
+            if not booking.check_out:
+                booking.registration.lessons_left -= 1
+                booking.registration.save()
+                booking.lesson.status = "COM"
+                booking.lesson.save()
             booking.check_in = datetime.now()
             booking.check_out = datetime.now()
             booking.save()
+            send_notification(lesson.teacher.user, "Check-in Alert", f"{request.user.first_name} has checked in for a class with you. Check your schedule for details.")
             return Response({"message": "Success"}, status=200)
         else:
             return Response({"message": "No booking found for the closest lesson."}, status=404)

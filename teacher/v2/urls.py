@@ -6,7 +6,8 @@ from .views import (
     StudentViewSet,
     RegistrationViewset,
     LessonViewset,
-    UnavailableTimeViewSet
+    UnavailableTimeViewSet,
+    get_availables
 )
 
 app_name = 'teacher'
@@ -14,6 +15,7 @@ app_name = 'teacher'
 
 urlpatterns = [
     # Course endpoints
+    path('get-available/', get_availables, name='get-available'),
     path('courses/', CourseViewset.as_view({'get': 'list', 'post': 'create'}), name='course-list-create'),
     path('courses/<uuid:uuid>', CourseViewset.as_view({'get': 'retrieve', 'put': 'edit'}), name='course-detail'),
 
@@ -28,10 +30,11 @@ urlpatterns = [
 
     # Registration endpoints
     path('registrations/', RegistrationViewset.as_view({'get': 'list', 'post': 'create'}), name='registration-list-create'),
+    path('registrations/simple/', RegistrationViewset.as_view({'get': 'simple_list'}), name='registration-simple-list'),
     path('registrations/<uuid:code>/', RegistrationViewset.as_view({'get': 'retrieve'}), name='registration-detail'),
 
     # Lesson endpoints
-    path('lessons/', LessonViewset.as_view({'get': 'list'}), name='lesson-list'),
+    path('lessons/', LessonViewset.as_view({'get': 'list', 'post': 'create'}), name='lesson-list'),
     path('lessons/<str:code>', LessonViewset.as_view({'get': 'retrieve'}), name='lesson-retrieve'),
 
     path('lessons/<str:code>/cancel/', LessonViewset.as_view({'put': 'cancel'}), name='lesson-cancel'),

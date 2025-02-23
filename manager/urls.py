@@ -42,7 +42,8 @@ staffViewSet = views.StaffViewSet.as_view({
 
 staffDetailViewSet = views.StaffViewSet.as_view({
     'get': "retrieve",
-    "put": 'edit'
+    "put": 'edit',
+    "delete": "destroy"
 })
 
 staffClientViewSet = views.StaffViewSet.as_view({
@@ -65,7 +66,8 @@ clientViewSet = views.ClientViewSet.as_view({
 
 clientDetailViewSet = views.ClientViewSet.as_view({
     "put": "edit",
-    "get": "retrieve"
+    "get": "retrieve",
+    "delete": "destroy"
 })
 
 clientRegistrationViewSet = views.ClientViewSet.as_view({
@@ -114,7 +116,7 @@ schoolSettingsViewSet = views.SchoolSettingsViewSet.as_view({
 # Enter URL path below
 urlpatterns = format_suffix_patterns([
     path('insight', insightViewSet, name='insight'),
-
+    
     path('lesson', lessonViewSet, name='lesson-list'),
     path('lesson/<slug:code>', lessonDetailViewSet, name='lesson-detail'),
     path('lesson/<slug:code>/cancel', lessonCancelViewSet, name='lesson-cancel'),

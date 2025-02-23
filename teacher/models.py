@@ -186,19 +186,6 @@ class Lesson(models.Model):
         with transaction.atomic():  # Ensure database consistency
             if not self.code:
                 self.code = self._generate_unique_code(12)
-
-            # Check if the status is changing to 'PENTE'
-            if self.pk is None:
-                status_changed_to_pending = True
-            elif self.status != 'PENTE':
-                status_changed_to_pending = False
-            else:
-                previous_status = Lesson.objects.get(pk=self.pk).status
-                status_changed_to_pending = self.status == 'PENTE' and previous_status != 'PENTE'
-
-            # if status_changed_to_pending:
-            #     self.check_for_conflicts()  # Check for conflicts before saving
-            #     self.check_available_time()  # Check if the lesson is within available time
-            #     self.check_unavailable_time()  # Check if the lesson conflicts with unavailable times
-                
+            self.check_for_conflicts()  # Check for conflicts before saving
             super(Lesson, self).save(*args, **kwargs)
+            

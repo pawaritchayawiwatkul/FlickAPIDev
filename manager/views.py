@@ -534,6 +534,21 @@ class StaffViewSet(ViewSet):
 
         return Response(availables, status=200)
     
+    def destroy(self, request, uuid):
+        admin = Admin.objects.filter(user_id=request.user.id).first()
+        if not admin:
+            return Response({"error": "Admin not found for the current user."}, status=404)
+
+        teacher = Teacher.objects.filter(user__uuid=uuid, school=admin.school).first()
+        if not teacher:
+            return Response({"error": "Teacher not found."}, status=404)
+        
+        try:
+            teacher.user.delete()
+        except ProtectedError:
+            return Response({"error": "Cannot delete a student with active registrations."}, status=400)
+        return Response({"message": "Staff deleted successfully."}, status=status.HTTP_204_NO_CONTENT)
+    
 class ClientViewSet(ViewSet):
     permission_classes = [IsAuthenticated, IsManager]
 
@@ -700,14 +715,20 @@ class ClientViewSet(ViewSet):
         if not admin:
             return Response({"error": "Admin not found for the current user."}, status=404)
 
+        payment_status = request.GET.get("payment_status")
+
         # Retrieve the teacher by primary key (id)
         try:
+            queryset = CourseRegistration.objects.select_related("course", "teacher__user")
+            if payment_status:
+                queryset = queryset.filter(payment_status=payment_status)
+            
             student = Student.objects.prefetch_related(
-                Prefetch(
-                    "registration",
-                    queryset=CourseRegistration.objects.select_related("course", "teacher__user"),
-                    to_attr="registrations"
-                )
+            Prefetch(
+                "registration",
+                queryset=queryset,
+                to_attr="registrations"
+            )
             ).get(user__uuid=uuid, school=admin.school)
         except Student.DoesNotExist:
             return Response({"error": "Student not found."}, status=404)
@@ -744,6 +765,21 @@ class ClientViewSet(ViewSet):
         
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+    def destroy(self, request, uuid):
+        admin = Admin.objects.filter(user_id=request.user.id).first()
+        if not admin:
+            return Response({"error": "Admin not found for the current user."}, status=404)
+
+        student = Student.objects.filter(user__uuid=uuid, school=admin.school).first()
+        if not student:
+            return Response({"error": "Student not found."}, status=404)
+
+        try:
+            student.user.delete()
+            student.delete()
+        except ProtectedError:
+            return Response({"error": "Cannot delete a student with active registrations."}, status=400)
+        return Response({"message": "Client deleted successfully."}, status=status.HTTP_204_NO_CONTENT)
 
 class CourseViewset(ViewSet):
     permission_classes = [IsAuthenticated, IsManager]

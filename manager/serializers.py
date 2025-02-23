@@ -8,6 +8,7 @@ from dateutil.relativedelta import relativedelta
 from datetime import date, timedelta
 from core.models import User  # Add this import
 from school.models import SchoolSettings  # Add this import
+from utils.notification_utils import send_notification
 
 class CourseRegistrationSerializer(serializers.ModelSerializer):
     teacher_uuid = serializers.UUIDField(write_only=True, required=True)
@@ -87,7 +88,7 @@ class CourseRegistrationSerializer(serializers.ModelSerializer):
         registration = CourseRegistration.objects.create(
             teacher=teacher,
             student=student,
-            payment_status='CON',
+            payment_status='confirm',
             **validated_data  # Add remaining fields dynamically
         )
         return registration
@@ -295,56 +296,85 @@ class CreateLessonSerializer(serializers.ModelSerializer):
     datetime = serializers.DateTimeField()
     student_uuid = serializers.UUIDField(write_only=True, required=True)
     registration_uuid = serializers.UUIDField(write_only=True, required=True)
-    teacher_uuid = serializers.UUIDField(write_only=True, required=True)  # Add teacher_uuid field
+    teacher_uuid = serializers.UUIDField(write_only=True, required=True)
 
     class Meta:
         model = Lesson
         fields = [
-            "datetime", 
-            "student_uuid", 
+            "datetime",
+            "student_uuid",
             "registration_uuid",
-            "teacher_uuid"  # Include teacher_uuid
+            "teacher_uuid"
         ]
 
-    def create(self, validated_data):
-        student_uuid = validated_data.pop('student_uuid')
-        registration_uuid = validated_data.pop('registration_uuid')
-        teacher_uuid = validated_data.pop('teacher_uuid')  # Retrieve teacher_uuid
+    def validate(self, data):
+        student_uuid = data.get("student_uuid")
+        registration_uuid = data.get("registration_uuid")
+        teacher_uuid = data.get("teacher_uuid")
 
+        errors = {}
+
+        # Validate Student
         try:
             student = Student.objects.get(user__uuid=student_uuid)
         except Student.DoesNotExist:
-            raise serializers.ValidationError({"student_uuid": "Student with this UUID does not exist."})
+            errors["student_uuid"] = "Student with this UUID does not exist."
 
+        # Validate Registration
         try:
             registration = CourseRegistration.objects.get(uuid=registration_uuid)
         except CourseRegistration.DoesNotExist:
-            raise serializers.ValidationError({"registration_uuid": "Registration with this UUID does not exist."})
+            errors["registration_uuid"] = "Registration with this UUID does not exist."
 
+        # Validate Teacher
         try:
             teacher = Teacher.objects.get(user__uuid=teacher_uuid)
         except Teacher.DoesNotExist:
-            raise serializers.ValidationError({"teacher_uuid": "Teacher with this UUID does not exist."})
+            errors["teacher_uuid"] = "Teacher with this UUID does not exist."
+
+        # Raise validation errors if any
+        if errors:
+            raise serializers.ValidationError(errors)
+
+        # Add validated objects to `data`
+        data["student"] = student
+        data["registration"] = registration
+        data["teacher"] = teacher
+
+        return data
+
+    def create(self, validated_data):
+        # Extract validated objects
+        student = validated_data.pop("student")
+        registration = validated_data.pop("registration")
+        teacher = validated_data.pop("teacher")
 
         try:
             lesson = Lesson.objects.create(
-                status='CON', 
-                course=registration.course,  # Set course to registration.course
-                datetime=validated_data['datetime'],
-                end_datetime=validated_data['datetime'] + timedelta(minutes=registration.course.duration),
+                status="CON",
+                course=registration.course,  
+                datetime=validated_data["datetime"],
+                end_datetime=validated_data["datetime"] + timedelta(minutes=registration.course.duration),
                 number_of_client=1,
-                teacher=teacher  # Assign teacher to the lesson
+                teacher=teacher  
             )
         except Exception as e:
             raise serializers.ValidationError({"lesson_creation": str(e)})
-        
+
         Booking.objects.create(
             lesson=lesson,
             student=student,
             registration=registration,
-            user_type='student',
-            status='COM'
+            user_type="student",
+            status="COM"
         )
+
+        # Send notifications
+        send_notification(student.user, "New Booking Alert",
+                          "Admin has booked a class for you. Check your schedule for details.")
+        send_notification(teacher.user, "New Booking Alert",
+                          "Admin has booked a class for you. Check your schedule for details.")
+
         return lesson
 
 class EditLessonSerializer(serializers.ModelSerializer):
