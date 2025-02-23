@@ -401,7 +401,7 @@ class StaffViewSet(ViewSet):
         if not admin:
             return Response({"error": "Admin not found for the current user."}, status=404)
 
-        break_time = request.data.pop('break_time', None)
+        break_time = request.data.get('break_time', None)
 
         # Retrieve the teacher by their UUID and ensure they belong to the admin's school
         try:
@@ -625,7 +625,7 @@ class ClientViewSet(ViewSet):
             return Response({"error": "Admin not found for the current user."}, status=404)
 
         # Deserialize the request data for the User (teacher) creation
-        points = request.data.pop('points', None)
+        points = request.data.get('points', None)
         user_serializer = CreateUserSerializer(data=request.data)
         if not user_serializer.is_valid():
             return Response(user_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -675,7 +675,7 @@ class ClientViewSet(ViewSet):
         student = Student.objects.select_related('user').filter(user__uuid=uuid, school=school).first()
         if not student:
             return Response({"error": "Student not found."}, status=status.HTTP_404_NOT_FOUND)
-        points = request.data.pop('points', None)
+        points = request.data.get('points', None)
         if points:
             try:
                 points = int(points)

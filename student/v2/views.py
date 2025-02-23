@@ -71,8 +71,11 @@ def check_in(request):
             if not booking.check_out:
                 booking.registration.lessons_left -= 1
                 booking.registration.save()
-                booking.lesson.status = "COM"
-                booking.lesson.save()
+                try:
+                    booking.lesson.status = "COM"
+                    booking.lesson.save()
+                except:
+                    return Response({"message": "Lesson status could not be updated."}, status=400)
             booking.check_in = datetime.now()
             booking.check_out = datetime.now()
             booking.save()

@@ -24,15 +24,15 @@ print("✅ SchoolSettings generation complete!")
 // Upload Code
 cd dev_api 
 source env/bin/activate
-git clone https://github.com/pawaritchayawiwatkul/FlickAPIDev.git version35
-cp .env version35
-cp -r keys version35
-cd version35
+git clone https://github.com/pawaritchayawiwatkul/FlickAPIDev.git version36
+cp .env version36
+cp -r keys version36
+cd version36
 rm -rf utils.py 
 sudo nano /etc/systemd/system/gunicorn.service 
 
 sudo systemctl daemon-reload
-sudo restart gunicorn
+sudo systemctl restart gunicorn
 
 
 python3 manage.py runserver

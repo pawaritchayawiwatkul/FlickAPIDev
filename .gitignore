@@ -1,0 +1,8 @@
+__pycache__/
+.env
+keys/
+static/
+staticfiles/
+venv/
+.txt
+server_config/

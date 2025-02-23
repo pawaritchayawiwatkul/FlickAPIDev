@@ -55,7 +55,7 @@ def generate_upcoming_private(school: School, registrations: List[CourseRegistra
                     available_slots = compute_available_time(
                         unavailables, lessons, current_date, start, stop, course.duration, interval, break_time
                     )
-
+                    
                     existing_lessons = ongoing_lessons_per_day[current_date]
                     for slot in available_slots:
                         lesson_start = slot['start']
@@ -68,8 +68,7 @@ def generate_upcoming_private(school: School, registrations: List[CourseRegistra
                         
                         if overlapping_count < max_capacity:
                             new_lessons.append({'datetime': lesson_start})
-                            bisect.insort(ongoing_lessons_per_day[current_date], (lesson_start, lesson_end))
-        
+                                    
         generated_lessons.append({
             "course_name": course.name,
             "course_description": course.description,

@@ -154,38 +154,19 @@ class Lesson(models.Model):
             if conflicting_lessons.exists():
                 raise ValidationError("There is a conflicting lesson during this time.")
 
-    def check_available_time(self):
-        """Check if the lesson is within the teacher's available time."""
-        # Convert lesson times to GMT
-        start_gmt = self.datetime.astimezone(gmt7)
-        lesson_start_gmt = start_gmt.time()
-        lesson_end_gmt = self.end_datetime.astimezone(gmt7).time()
-        lesson_day = str(start_gmt.weekday() + 1)
-
-        available_times = AvailableTime.objects.filter(
-            teacher=self.teacher,
-            day=lesson_day,
-            start__lte=lesson_start_gmt,
-            stop__gte=lesson_end_gmt
-        )
-        if not available_times.exists():
-            raise ValidationError("The lesson is not within the teacher's available time.")
-
-    def check_unavailable_time(self):
-        """Check if the lesson conflicts with the teacher's unavailable times."""
-        conflicting_unavailable_times = UnavailableTimeOneTime.objects.filter(
-            teacher=self.teacher,
-            date=self.datetime.date(),
-            start__lt=self.end_datetime.time(),
-            stop__gt=self.datetime.time()
-        ) 
-        if conflicting_unavailable_times.exists():
-            raise ValidationError("The lesson conflicts with the teacher's unavailable times.")
-
     def save(self, *args, **kwargs):
         with transaction.atomic():  # Ensure database consistency
             if not self.code:
                 self.code = self._generate_unique_code(12)
-            self.check_for_conflicts()  # Check for conflicts before saving
+            if self.pk is None:
+                self.check_for_conflicts()  # Check for conflicts only if first create
+            elif self.has_time_changed():
+                self.check_for_conflicts()  # Check for conflicts if time changed
             super(Lesson, self).save(*args, **kwargs)
-            
+    
+    def has_time_changed(self):
+        """Check if the lesson time has changed."""
+        if not self.pk:
+            return True
+        original = Lesson.objects.get(pk=self.pk)
+        return original.datetime != self.datetime or original.end_datetime != self.end_datetime
